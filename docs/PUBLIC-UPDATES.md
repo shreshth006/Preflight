@@ -56,8 +56,8 @@ until the milestone is real and the numbers are filled in.
 
 > PREFLIGHT SSL_VERIFICATION, local benchmark:
 >
-> 8/8 correct — 100% accuracy
-> p50 190ms · p95 878ms
+> 18/18 correct — 100% accuracy
+> p50 25ms · p95 1,203ms
 > Verdicts covered: valid, expired, hostname_mismatch, self_signed,
 > untrusted, unreachable
 >
@@ -79,18 +79,16 @@ until the milestone is real and the numbers are filled in.
 
 ## 6. Registration — `READY`
 
-> PREFLIGHT is registered on Telegraph as an SSL_VERIFICATION miner.
+> PREFLIGHT is registered on Telegraph with seven deterministic
+> infrastructure and on-chain intents.
 >
-> registration id: 282
-> tx: 0xf3a301103ebdad9d…0aa907d1 (Base Sepolia)
-> intent: SSL_VERIFICATION (Tier A, deterministic)
-> endpoint: https://preflight-ssl-verification.vercel.app/ssl-check
+> registration id: 288 (Base Sepolia)
+> intents: SSL_VERIFICATION, URL_SCAN, GAS_PRICE, WALLET_BALANCE_CHECK,
+> ONCHAIN_TX_LOOKUP, TVL_LOOKUP, CRYPTO_PRICE
+> live: https://preflight-ssl-verification.vercel.app
+> source: https://github.com/shreshth006/Preflight
 >
-> We verified the registration ourselves rather than trusting the UI: read
-> getMiner() back off the Diamond, and confirmed the on-chain YAML hash equals
-> the SHA-256 of the bytes actually served by the IPFS gateway.
->
-> One intent. Narrow surface. @Telegraphprotoc
+> Every endpoint is exercised by the production smoke gate. @Telegraphprotoc
 
 ## 7. First real score — `PENDING` (never post a projected number)
 

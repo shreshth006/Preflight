@@ -1,10 +1,29 @@
 # PREFLIGHT
 
-Deterministic infrastructure and on-chain signals for Telegraph. Before an
-autonomous agent trusts an endpoint, a chain, or an address, it asks Telegraph.
+![PREFLIGHT — trust infrastructure for autonomous agents](docs/assets/preflight-social-preview.png)
 
-**Live:** https://preflight-ssl-verification.vercel.app
-**Registered:** Base Sepolia, registration `286`, slug `preflight-ssl-verification`
+Open-source trust infrastructure for autonomous agents. Before an agent
+connects to an endpoint, follows a URL, trusts a chain, or acts on an address,
+PREFLIGHT checks the target and returns a deterministic, machine-readable
+verdict.
+
+PREFLIGHT serves its infrastructure and on-chain signals through Telegraph.
+
+- **Live:** https://preflight-ssl-verification.vercel.app
+- **Source:** https://github.com/shreshth006/Preflight
+- **Registered:** Base Sepolia, registration `288`, slug `preflight-ssl-verification`
+
+## Try it
+
+```bash
+curl 'https://preflight-ssl-verification.vercel.app/ssl-check?domain=example.com'
+curl 'https://preflight-ssl-verification.vercel.app/ssl-check?domain=expired.badssl.com'
+curl 'https://preflight-ssl-verification.vercel.app/url-scan?url=http://127.0.0.1:22'
+```
+
+The first target is accepted, the expired certificate is classified rather
+than treated as a server error, and the loopback URL is blocked by the SSRF
+guard.
 
 ## Intents served
 
@@ -79,6 +98,7 @@ curl 'http://127.0.0.1:3000/gas-price?chain=base'
   including the network-wide score distribution, the canonical scoring
   formula, and the defects found by production sweeps. Nothing in it is
   estimated.
-- [`docs/PUBLIC-UPDATES.md`](docs/PUBLIC-UPDATES.md) — update drafts.
+- [`docs/PUBLIC-UPDATES.md`](docs/PUBLIC-UPDATES.md) — truthful public launch
+  and build-in-public drafts.
 
 Track 3 Agent Gateway work is deferred until the miner has been scored.

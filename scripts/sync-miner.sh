@@ -15,7 +15,7 @@
 # ~/.preflight-miner-key). Never passed on the command line, never logged.
 set -euo pipefail
 
-REPO="${REPO:-Harshyadav442277/Telegraph}"
+REPO="${REPO:-shreshth006/Preflight}"
 DIAMOND="${DIAMOND:-0x5a2324aA18613FAD4e44bDF0d6c73Ec1f6D87ff8}"
 RPC="${RPC:-https://sepolia.base.org}"
 YAML_FILE="${YAML_FILE:-telegraph/miner.yaml}"

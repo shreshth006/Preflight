@@ -17,8 +17,8 @@ description: >
 base_url: https://preflight-ssl-verification.vercel.app
 
 docs:
-  repository: https://github.com/Harshyadav442277/Telegraph
-  documentation: https://github.com/Harshyadav442277/Telegraph/blob/main/docs/TELEGRAPH-INTEGRATION.md
+  repository: https://github.com/shreshth006/Preflight
+  documentation: https://github.com/shreshth006/Preflight/blob/main/docs/TELEGRAPH-INTEGRATION.md
 
 auth:
   type: none

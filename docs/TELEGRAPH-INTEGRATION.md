@@ -262,4 +262,5 @@ polls the node until the manifest reports `active` or `rejected`.
 The signing key is read from `$MINER_PRIVATE_KEY` or `$MINER_KEY_FILE`
 (default `~/.preflight-miner-key`, mode 600). It is never passed as a command
 argument and never logged. The registering wallet owns the slug, so updates
-must be signed by the same wallet that holds registration 282.
+must be signed by the same wallet that holds the active registration recorded
+in `telegraph/registration-id`.

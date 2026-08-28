@@ -1,9 +1,9 @@
 # PREFLIGHT Scoring Log
 
 Every entry records observed Telegraph data. Nothing here is estimated or
-projected. PREFLIGHT is not yet registered, so no PREFLIGHT score exists yet;
-the entries below are baseline observations of the live network used to set
-targets.
+projected. PREFLIGHT is registered and active, but no canonical PREFLIGHT
+score has been observed yet; the entries below are baseline observations and
+verified deployment/registration events.
 
 ## Method
 
@@ -331,6 +331,7 @@ the local file byte-for-byte.
 
 ## PREFLIGHT entries
 
-_No PREFLIGHT scores yet — miner is not registered. Entries will be appended
-here with timestamp, epoch, miner ID, intent, score, rank, request count, and
-the deployed response version._
+_No canonical PREFLIGHT scores have been observed yet. The active registration
+is recorded in `telegraph/registration-id`. Future entries will include the
+timestamp, epoch, miner ID, intent, score, rank, request count, and deployed
+response version._
