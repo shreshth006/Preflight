@@ -1,11 +1,468 @@
 <!doctype html>
-<meta charset="utf-8" />
-<title>PREFLIGHT</title>
-<h1>PREFLIGHT</h1>
-<p>Deterministic SSL_VERIFICATION miner for Telegraph Protocol.</p>
-<ul>
-  <li><code>GET /health</code></li>
-  <li><code>GET /ready</code></li>
-  <li><code>GET /ssl-check?domain=example.com</code></li>
-  <li><code>GET /miner.yaml</code></li>
-</ul>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="PREFLIGHT verifies the endpoint before an autonomous agent connects, pays, or acts."
+    />
+    <meta name="theme-color" content="#07111f" />
+    <title>PREFLIGHT — Trust before action</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07111f;
+        --panel: rgba(13, 29, 48, 0.82);
+        --panel-strong: #0e2238;
+        --line: rgba(151, 191, 220, 0.18);
+        --muted: #8fa8ba;
+        --text: #edf7ff;
+        --cyan: #55e6d1;
+        --green: #70e58d;
+        --red: #ff7e88;
+        --amber: #ffd479;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 12% 0%, rgba(68, 224, 206, 0.16), transparent 34rem),
+          radial-gradient(circle at 92% 20%, rgba(94, 142, 255, 0.16), transparent 32rem), var(--bg);
+      }
+
+      a {
+        color: var(--cyan);
+      }
+      .shell {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 34px 0 70px;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        letter-spacing: 0.16em;
+        font-size: 13px;
+        font-weight: 800;
+      }
+      .mark {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border: 1px solid rgba(85, 230, 209, 0.55);
+        border-radius: 10px;
+        color: var(--cyan);
+        box-shadow: 0 0 28px rgba(85, 230, 209, 0.16);
+      }
+      .toplink {
+        font-size: 13px;
+        color: var(--muted);
+        text-decoration: none;
+      }
+      .hero {
+        max-width: 790px;
+        padding: 88px 0 48px;
+      }
+      .eyebrow {
+        color: var(--cyan);
+        font-size: 12px;
+        font-weight: 750;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      h1 {
+        margin: 17px 0 20px;
+        max-width: 760px;
+        font-size: clamp(44px, 8vw, 82px);
+        line-height: 0.98;
+        letter-spacing: -0.065em;
+      }
+      .lede {
+        max-width: 630px;
+        margin: 0;
+        color: #b5c9d8;
+        font-size: clamp(18px, 2.4vw, 24px);
+        line-height: 1.45;
+      }
+      .hero-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 29px;
+      }
+      .button,
+      button {
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        color: var(--text);
+        background: rgba(17, 39, 62, 0.8);
+        cursor: pointer;
+        font: inherit;
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        padding: 11px 15px;
+        font-size: 14px;
+        text-decoration: none;
+      }
+      .button.primary {
+        border-color: rgba(85, 230, 209, 0.5);
+        background: rgba(27, 87, 91, 0.42);
+      }
+      .section-label {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        margin: 24px 0 16px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 750;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .section-label::after {
+        content: '';
+        height: 1px;
+        flex: 1;
+        background: var(--line);
+      }
+      .checks {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+      }
+      .check {
+        min-height: 245px;
+        padding: 22px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: linear-gradient(155deg, var(--panel), rgba(8, 20, 35, 0.76));
+        box-shadow: 0 22px 70px rgba(0, 0, 0, 0.16);
+      }
+      .check-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .check h2 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: -0.02em;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+        border-radius: 999px;
+        color: var(--muted);
+        background: rgba(143, 168, 186, 0.1);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .chip::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      .host {
+        margin: 26px 0 7px;
+        font:
+          600 15px/1.4 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        color: #d8e7f0;
+        overflow-wrap: anywhere;
+      }
+      .meaning {
+        min-height: 45px;
+        margin: 0 0 17px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .run {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .run:hover,
+      .button:hover {
+        border-color: rgba(85, 230, 209, 0.62);
+        background: rgba(31, 86, 90, 0.58);
+      }
+      .result {
+        display: none;
+        margin-top: 17px;
+        padding-top: 17px;
+        border-top: 1px solid var(--line);
+      }
+      .result.visible {
+        display: block;
+      }
+      .decision {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .decision strong {
+        font-size: 18px;
+        letter-spacing: 0.04em;
+      }
+      .decision.allow strong {
+        color: var(--green);
+      }
+      .decision.block strong {
+        color: var(--red);
+      }
+      .decision.pending strong {
+        color: var(--amber);
+      }
+      .latency {
+        color: var(--muted);
+        font:
+          12px ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      .reason {
+        margin: 10px 0 0;
+        color: #b8cad6;
+        font-size: 12px;
+        line-height: 1.55;
+      }
+      .flow {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: stretch;
+        gap: 14px;
+        margin-top: 36px;
+      }
+      .flow-card {
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--panel);
+      }
+      .flow-card h2 {
+        margin: 0 0 10px;
+        font-size: 17px;
+      }
+      .flow-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .flow-icon {
+        display: grid;
+        place-items: center;
+        align-self: center;
+        width: 38px;
+        height: 38px;
+        border: 1px solid rgba(85, 230, 209, 0.48);
+        border-radius: 50%;
+        color: var(--cyan);
+        font-size: 20px;
+      }
+      .foot {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        margin-top: 30px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .foot p {
+        margin: 0;
+      }
+      code {
+        color: #d9f4ef;
+        font: inherit;
+      }
+      @media (max-width: 760px) {
+        .shell {
+          width: min(100% - 28px, 600px);
+          padding-top: 22px;
+        }
+        .hero {
+          padding-top: 65px;
+        }
+        .checks,
+        .flow {
+          grid-template-columns: 1fr;
+        }
+        .flow-icon {
+          transform: rotate(90deg);
+          justify-self: center;
+        }
+        .foot {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <nav class="topbar" aria-label="Main navigation">
+        <a class="brand" href="/" aria-label="PREFLIGHT home"
+          ><span class="mark">↗</span> PREFLIGHT</a
+        >
+        <a class="toplink" href="https://github.com/shreshth006/Preflight"
+          >Open source on GitHub ↗</a
+        >
+      </nav>
+
+      <section class="hero">
+        <div class="eyebrow">Trust before action</div>
+        <h1>Don’t let an agent call blind.</h1>
+        <p class="lede">
+          PREFLIGHT checks the endpoint before an autonomous agent connects, pays, or acts.
+        </p>
+        <div class="hero-links">
+          <a class="button primary" href="#checks">Run the proof ↓</a>
+          <a class="button" href="https://github.com/shreshth006/Preflight">Read the code ↗</a>
+        </div>
+      </section>
+
+      <div id="checks" class="section-label">Three requests. Three decisions.</div>
+      <section class="checks" aria-label="Live proof checks">
+        <article class="check">
+          <div class="check-head">
+            <h2>Known-good endpoint</h2>
+            <span class="chip">allow path</span>
+          </div>
+          <div class="host">example.com</div>
+          <p class="meaning">A normal endpoint with a trusted certificate.</p>
+          <button class="run" data-domain="example.com" data-expected="valid">Ask PREFLIGHT</button>
+          <div class="result" aria-live="polite"></div>
+        </article>
+        <article class="check">
+          <div class="check-head">
+            <h2>Expired certificate</h2>
+            <span class="chip">block path</span>
+          </div>
+          <div class="host">expired.badssl.com</div>
+          <p class="meaning">Reachable does not mean safe to trust.</p>
+          <button class="run" data-domain="expired.badssl.com" data-expected="expired">
+            Ask PREFLIGHT
+          </button>
+          <div class="result" aria-live="polite"></div>
+        </article>
+        <article class="check">
+          <div class="check-head">
+            <h2>Private target</h2>
+            <span class="chip">SSRF guard</span>
+          </div>
+          <div class="host">127.0.0.1</div>
+          <p class="meaning">Attacker-controlled destinations never get a free pass.</p>
+          <button class="run" data-domain="127.0.0.1" data-expected="unreachable">
+            Ask PREFLIGHT
+          </button>
+          <div class="result" aria-live="polite"></div>
+        </article>
+      </section>
+
+      <section class="flow" aria-label="Agent decision flow">
+        <div class="flow-card">
+          <h2>Agent request</h2>
+          <p>“Call this external URL and continue if it is trustworthy.”</p>
+        </div>
+        <div class="flow-icon" aria-hidden="true">→</div>
+        <div class="flow-card">
+          <h2>PREFLIGHT verdict</h2>
+          <p>Machine-readable decision, certificate facts, and a reason that can be audited.</p>
+        </div>
+      </section>
+
+      <footer class="foot">
+        <p>Powered by Telegraph Protocol · registered Miner 288</p>
+        <p>
+          <a href="/miner.yaml">Miner config</a> · <a href="/health">Health</a> ·
+          <a href="/ready">Ready</a>
+        </p>
+      </footer>
+    </main>
+    <script>
+      const buttons = document.querySelectorAll('.run');
+      const escapeHtml = (value) =>
+        String(value).replace(
+          /[&<>"']/g,
+          (character) =>
+            ({
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#039;',
+            })[character],
+        );
+      buttons.forEach((button) => {
+        button.addEventListener('click', async () => {
+          const result = button.parentElement.querySelector('.result');
+          const domain = button.dataset.domain;
+          button.disabled = true;
+          button.textContent = 'Checking live endpoint…';
+          result.className = 'result visible';
+          result.innerHTML =
+            '<div class="decision pending"><strong>VERIFYING</strong><span class="latency">live request</span></div>';
+          const started = performance.now();
+          try {
+            const response = await fetch('/ssl-check?domain=' + encodeURIComponent(domain), {
+              cache: 'no-store',
+            });
+            const body = await response.json();
+            const elapsed = Math.round(performance.now() - started);
+            const blocked = body.verdict !== 'valid';
+            result.innerHTML =
+              '<div class="decision ' +
+              (blocked ? 'block' : 'allow') +
+              '"><strong>' +
+              (blocked ? 'BLOCK' : 'ALLOW') +
+              '</strong><span class="latency">' +
+              elapsed +
+              ' ms</span></div><p class="reason">' +
+              escapeHtml(body.reason || body.verdict || 'No reason returned.') +
+              '</p>';
+          } catch (error) {
+            result.innerHTML =
+              '<div class="decision block"><strong>NO DECISION</strong></div><p class="reason">The proof request failed before a verdict could be displayed.</p>';
+          } finally {
+            button.disabled = false;
+            button.textContent = 'Run again';
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
