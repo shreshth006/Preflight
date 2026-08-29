@@ -34,6 +34,8 @@ interface RpcTx {
   value?: string;
   nonce?: string;
   gasPrice?: string;
+  /** Calldata. "0x" means a plain value transfer with no contract invoked. */
+  input?: string;
 }
 
 interface RpcReceipt {
@@ -124,11 +126,15 @@ export async function lookupTransaction(
   // to be inferred from two address strings, is what puts them in the summary.
   const selfTransfer =
     tx.from && tx.to ? tx.from.toLowerCase() === tx.to.toLowerCase() : null;
-  const contractCall = contractCreated
-    ? true
-    : tx.to === null || tx.to === undefined
+  // Empty calldata is a plain value transfer; anything else is a call into a
+  // contract. Only unknown when the node omitted `input` entirely.
+  const calldata = tx.input;
+  const contractCall =
+    contractCreated || tx.to === null || tx.to === undefined
       ? true
-      : null;
+      : calldata === undefined
+        ? null
+        : calldata !== '0x' && calldata !== '0x0' && calldata !== '';
 
   const outcome = pending
     ? `is still pending and has not been included in a block`
@@ -158,9 +164,20 @@ export async function lookupTransaction(
       : ` It consumed ${gasUsed?.toString()} gas at ${formatUnits(gasPrice ?? 0n, 9, 4)} gwei, ` +
         `for a total fee of ${formatUnits(feeWei, chain.decimals, 8)} ${chain.symbol}.`;
 
+  // Whether a contract was invoked is one of the things this intent is asked
+  // outright, so it is stated rather than left to be inferred from calldata.
+  const callSentence =
+    contractCall === null
+      ? ''
+      : contractCall
+        ? contractCreated
+          ? ' The transaction deployed a contract.'
+          : ' The transaction carried calldata, so it invoked a contract.'
+        : ' The transaction carried no calldata, so it was a plain value transfer that involved no contract call.';
+
   const reason =
     `Transaction ${normalized} on ${chain.name} (chain ID ${chain.chainId}) ${outcome}. ` +
-    `${transfer} ${parties}.${blockSentence}${feeSentence}`;
+    `${transfer} ${parties}.${callSentence}${blockSentence}${feeSentence}`;
 
   return {
     ...base,
