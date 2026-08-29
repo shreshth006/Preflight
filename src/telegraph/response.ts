@@ -18,6 +18,12 @@ export interface LiveCertResponse {
   tls_protocol?: string | null;
   trusted?: boolean;
   unreachable_reason?: string;
+  /** Which stage of the connection failed: DNS, TCP, or the TLS handshake. */
+  failure_stage?: 'dns' | 'tcp' | 'tls_handshake';
+  /** Checks that did run before the failure, and those the failure prevented. */
+  checks_completed?: string[];
+  checks_blocked?: string[];
+  recommendation?: string;
   verdict:
     | 'valid'
     | 'expired'
@@ -163,7 +169,37 @@ export function toTelegraphResponse(
     response.trusted = result.chainTrusted === true;
     response.valid_from = dateOnly(result.certificate?.validFrom);
   }
-  if (!result.reachable || !result.handshakeSucceeded)
+  if (!result.reachable || !result.handshakeSucceeded) {
     response.unreachable_reason = result.failureMessage ?? result.failureCode;
+    // An unreachable host still produces a real finding: which stage failed,
+    // and therefore which checks were and were not able to run. Reporting that
+    // as structured fields says what a bare "unreachable" cannot.
+    const code = result.failureCode ?? '';
+    const stage: 'dns' | 'tcp' | 'tls_handshake' =
+      code.includes('DNS') || code.includes('ENOTFOUND') || code.includes('EAI')
+        ? 'dns'
+        : result.reachable
+          ? 'tls_handshake'
+          : 'tcp';
+    response.failure_stage = stage;
+    response.checks_completed =
+      stage === 'dns'
+        ? ['hostname syntax validation']
+        : stage === 'tcp'
+          ? ['hostname syntax validation', 'DNS resolution']
+          : ['hostname syntax validation', 'DNS resolution', 'TCP connection to port 443'];
+    response.checks_blocked = [
+      'certificate chain trust',
+      'hostname and SAN matching',
+      'validity period',
+      'signature algorithm and key strength',
+    ];
+    response.recommendation =
+      stage === 'dns'
+        ? `Confirm that ${response.domain} resolves in public DNS, then re-run the certificate chain and hostname checks once it does.`
+        : stage === 'tcp'
+          ? `Confirm that ${response.domain} accepts TCP connections on port 443 and is not blocked by a firewall, then re-run the certificate chain and hostname checks.`
+          : `Confirm that ${response.domain} completes a TLS handshake with a supported protocol version and cipher suite, then re-run the certificate chain and hostname checks.`;
+  }
   return response;
 }

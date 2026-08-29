@@ -5,6 +5,8 @@ export interface TxLookupResponse {
   chain: string;
   chain_id: number;
   found: boolean;
+  self_transfer: boolean | null;
+  contract_call: boolean | null;
   status: 'success' | 'failed' | 'pending' | 'not_found';
   verdict: 'success' | 'failed' | 'pending' | 'not_found';
   block_number: number | null;
@@ -72,6 +74,8 @@ export async function lookupTransaction(
     return {
       ...base,
       found: false,
+      self_transfer: null,
+      contract_call: null,
       status: 'not_found',
       verdict: 'not_found',
       block_number: null,
@@ -114,6 +118,18 @@ export async function lookupTransaction(
   const feeWei = gasUsed !== null && gasPrice !== null ? gasUsed * gasPrice : null;
   const contractCreated = receipt?.contractAddress ?? null;
 
+  // The scored text is a summary of this response, and the questions asked of
+  // this intent are specific ("are the sender and recipient the same?", "did it
+  // call a contract?"). Stating those facts as fields, rather than leaving them
+  // to be inferred from two address strings, is what puts them in the summary.
+  const selfTransfer =
+    tx.from && tx.to ? tx.from.toLowerCase() === tx.to.toLowerCase() : null;
+  const contractCall = contractCreated
+    ? true
+    : tx.to === null || tx.to === undefined
+      ? true
+      : null;
+
   const outcome = pending
     ? `is still pending and has not been included in a block`
     : succeeded
@@ -123,11 +139,13 @@ export async function lookupTransaction(
     valueWei === null || valueWei === 0n
       ? `It transferred no native ${chain.symbol}`
       : `It transferred ${value} ${chain.symbol}`;
-  const parties = `from ${tx.from ?? 'an unknown sender'} to ${
-    contractCreated
-      ? `a newly deployed contract at ${contractCreated}`
-      : (tx.to ?? 'a contract creation with no recipient')
-  }`;
+  const parties = selfTransfer
+    ? `from ${tx.from} back to the same address ${tx.to}, so the sender and the recipient are identical`
+    : `from ${tx.from ?? 'an unknown sender'} to ${
+        contractCreated
+          ? `a newly deployed contract at ${contractCreated}`
+          : (tx.to ?? 'a contract creation with no recipient')
+      }`;
   const blockSentence =
     blockNumber === null
       ? ''
@@ -147,6 +165,8 @@ export async function lookupTransaction(
   return {
     ...base,
     found: true,
+    self_transfer: selfTransfer,
+    contract_call: contractCall,
     status,
     verdict: status,
     block_number: blockNumber,

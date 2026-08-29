@@ -117,7 +117,10 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
     handle: async (values) => {
       const subject = findSubject(values) ?? values.all()[0];
       if (!subject) throw new TypeError('missing required field: protocol');
-      return lookupTvl(subject);
+      // "Aave V3 on the Ethereum chain" asks for that chain's share, not the
+      // protocol total across every deployment.
+      const named = findChain(values);
+      return lookupTvl(subject, new Date(), lookupChain(named ?? '')?.name);
     },
   },
 };

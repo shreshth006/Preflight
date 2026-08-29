@@ -1,5 +1,8 @@
 export interface TvlResponse {
   query: string;
+  /** Chain the figure is scoped to, when the question named one. */
+  chain: string | null;
+  chain_tvl_usd: number | null;
   resolved_name: string | null;
   kind: 'protocol' | 'chain' | 'not_found' | 'unavailable';
   verdict: 'protocol' | 'chain' | 'not_found' | 'unavailable';
@@ -92,10 +95,25 @@ async function getProtocolTvl(slug: string, timeoutMs = 9_000): Promise<Fetched<
   }
 }
 
-export async function lookupTvl(query: string, now = new Date()): Promise<TvlResponse> {
+/** DefiLlama's per-chain breakdown for a protocol, keyed by chain name. */
+async function getChainTvls(slug: string): Promise<Record<string, number> | null> {
+  const r = await getJson<{ currentChainTvls?: Record<string, number> }>(
+    `${LLAMA}/protocol/${slug}`,
+    20_000,
+  );
+  return r.ok ? (r.value.currentChainTvls ?? null) : null;
+}
+
+export async function lookupTvl(
+  query: string,
+  now = new Date(),
+  chainHint?: string,
+): Promise<TvlResponse> {
   const slug = slugify(query);
   const base = {
     query,
+    chain: chainHint ?? null,
+    chain_tvl_usd: null as number | null,
     source: 'DefiLlama',
     confidence: 1,
     checked_at: now.toISOString(),
@@ -123,6 +141,50 @@ export async function lookupTvl(query: string, now = new Date()): Promise<TvlRes
 
   if (!chainNameMatches && protocolTvl !== null && protocolTvl > 0) {
     const name = titleCase(query);
+    // A question naming a chain ("Aave V3 on Ethereum") is asking for that
+    // chain's share, not the protocol total. Answering the total is a
+    // different question than the one asked.
+    let chainScoped: number | null = null;
+    let scopedChain = '';
+    if (chainHint) {
+      scopedChain = chainHint;
+      const per = await getChainTvls(slug);
+      if (per) {
+        const want = chainHint.toLowerCase();
+        for (const [k, v] of Object.entries(per)) {
+          if (k.toLowerCase() === want && typeof v === 'number') chainScoped = v;
+        }
+      }
+    }
+    if (chainScoped !== null) {
+      return {
+        ...base,
+        chain_tvl_usd: chainScoped,
+        resolved_name: name,
+        kind: 'protocol',
+        verdict: 'protocol',
+        tvl_usd: chainScoped,
+        tvl_formatted: formatUsd(chainScoped),
+        change_1d_pct: null,
+        change_7d_pct: null,
+        category: null,
+        chains: [scopedChain],
+        symbol: null,
+        url: `https://defillama.com/protocol/${slug}`,
+        // Both figures are stated affirmatively. The question asked for the
+        // chain, so that leads; the protocol total is reported alongside it
+        // rather than only as a contrast, because "TVL of Aave V3" is
+        // ambiguous and a reader asking either question is answered.
+        reason:
+          `The ${name} protocol holds a total value locked of ${formatUsd(chainScoped)} ` +
+          `(${chainScoped.toFixed(2)} USD) on ${titleCase(scopedChain)}, according to DefiLlama. ` +
+          `Across every chain ${name} is deployed on, its total value locked is ` +
+          `${formatUsd(protocolTvl)}, of which ${titleCase(scopedChain)} is the ` +
+          `${((chainScoped / protocolTvl) * 100).toFixed(1)}% share. Total value locked ` +
+          `measures the aggregate USD value of all assets deposited in the protocol's ` +
+          `smart contracts.`,
+      };
+    }
     return {
       ...base,
       resolved_name: name,
