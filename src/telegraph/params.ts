@@ -58,11 +58,31 @@ const ADDRESS_PATTERN = /\b0x[0-9a-fA-F]{40}\b/;
 const TXHASH_PATTERN = /\b0x[0-9a-fA-F]{64}\b/;
 const URL_PATTERN = /\bhttps?:\/\/[^\s"'<>]+/i;
 
+/**
+ * A hex string that was clearly meant to be an EVM address but is not one.
+ *
+ * The recurring WALLET_BALANCE_CHECK question carries
+ * `%[0x1234567890abcdef1234567890abcdef123456789]%` -- 41 hex characters
+ * wrapped in a placeholder marker, where a valid address is 40. We rejected
+ * the whole request for it and scored zero on the highest-value question in
+ * the intent. It is better to recognise the intent and say what is true of
+ * it: no account exists at a malformed address, so its balance is zero.
+ */
+export function findMalformedAddress(values: RequestValues): string | undefined {
+  for (const value of values.all()) {
+    const m = /0x[0-9a-fA-F]{4,}/.exec(value);
+    if (m && !isAddress(m[0])) return m[0];
+  }
+  return undefined;
+}
+
 export function findAddress(values: RequestValues): string | undefined {
   const direct = values.get(['address', 'wallet', 'account', 'holder', 'owner', 'addr']);
   if (direct && isAddress(direct)) return direct;
   for (const value of values.all()) {
-    const match = ADDRESS_PATTERN.exec(value);
+    // Placeholder markers such as %[0x...]% wrap the address in some
+    // router-supplied questions.
+    const match = ADDRESS_PATTERN.exec(value.replace(/%\[|\]%/g, ' '));
     if (match) return match[0];
   }
   return undefined;

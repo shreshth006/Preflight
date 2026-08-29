@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { extractDomain, extractDomainFromQuery } from '../telegraph/request.js';
 import {
   findAddress,
+  findMalformedAddress,
   findChain,
   findEnsName,
   findSubject,
@@ -23,7 +24,7 @@ import type { TLSVerificationOptions } from '../tls/types.js';
 import { chainFromText, lookupChain, resolveChain, SUPPORTED_CHAINS } from '../chain/rpc.js';
 import { resolveEnsName } from '../chain/ens.js';
 import { getGasPrice } from '../intents/gasPrice.js';
-import { getWalletBalance } from '../intents/walletBalance.js';
+import { describeMalformedAddress, getWalletBalance } from '../intents/walletBalance.js';
 import { lookupTransaction } from '../intents/onchainTx.js';
 import { describeDocumentedIncident, scanUrl } from '../intents/urlScan.js';
 import { lookupTvl } from '../intents/tvl.js';
@@ -87,6 +88,11 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
         if (resolved) return getWalletBalance(resolved, chain, new Date(), ensName);
         throw new TypeError(`ENS name does not resolve to an address: ${ensName}`);
       }
+      // A hex string that was meant to be an address but is the wrong length
+      // is a question we can answer rather than a request we should refuse:
+      // no account exists at it, so its balance is zero.
+      const malformed = findMalformedAddress(values);
+      if (malformed) return describeMalformedAddress(malformed, chain);
       throw new TypeError(
         'missing required field: address (an 0x-prefixed EVM address or an ENS name)',
       );

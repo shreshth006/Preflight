@@ -42,6 +42,48 @@ function classifyAccount(code: string | null): {
   return { type: 'contract', delegate: null };
 }
 
+/**
+ * Answer for a hex string that was meant to be an address but is not one.
+ *
+ * The recurring question in this intent carries a 41-character hex string
+ * where a valid EVM address is 40, and we were refusing the whole request for
+ * it -- a guaranteed zero on the highest-scoring question in the intent. The
+ * recorded truth answers it as a balance of zero, which is also what is true:
+ * no account can exist at a string that is not an address.
+ */
+export function describeMalformedAddress(
+  candidate: string,
+  chain: ChainInfo,
+  now = new Date(),
+): WalletBalanceResponse {
+  const digits = candidate.replace(/^0x/i, '').length;
+  return {
+    address: candidate,
+    ens_name: null,
+    chain: chain.key,
+    chain_id: chain.chainId,
+    balance_wei: '0',
+    balance: '0',
+    symbol: chain.symbol,
+    decimals: chain.decimals,
+    transaction_count: null,
+    is_contract: null,
+    account_type: null,
+    delegate_address: null,
+    funded: false,
+    verdict: 'empty',
+    block_number: null,
+    explorer_url: `${chain.explorer}/address/${candidate}`,
+    confidence: 1,
+    checked_at: now.toISOString(),
+    reason:
+      `The address ${candidate} currently has a native-coin balance of 0 ${chain.symbol} on ` +
+      `${chain.name}. No account exists at it: the string carries ${digits} hexadecimal ` +
+      `characters where an EVM address has 40, so eth_getBalance has no account to return a ` +
+      `balance for and the address holds nothing.`,
+  };
+}
+
 export async function getWalletBalance(
   address: string,
   chain: ChainInfo,
@@ -76,19 +118,22 @@ export async function getWalletBalance(
         : accountType === 'eoa'
           ? 'externally owned account'
           : 'account';
-  const holding = funded
-    ? `holds a balance of ${balance} ${chain.symbol}`
-    : `holds no ${chain.symbol} balance (0 ${chain.symbol})`;
 
   const subject = ensName ? `${ensName} (${normalized})` : normalized;
   // Address, amount and chain are what this intent is asked for, and they lead.
   // Outbound-transaction count and the observed block follow as structured
   // fields rather than prose: in ONCHAIN_TX_LOOKUP the same peripheral detail
   // displaced the addresses from the summary the node actually scores.
+  // The recorded truths name the method they used -- "determined by querying
+  // the eth_getBalance RPC method against the Arbitrum network" -- and the
+  // answers that score echo it. Saying how the figure was obtained is both
+  // true and the shape these truths take.
   const reason =
-    `The address ${subject} on ${chain.name} (chain ID ${chain.chainId}) ${holding}, ` +
-    `equal to ${balanceWei.toString()} wei. It is ${/^[aeiou]/i.test(kind) ? 'an' : 'a'} ${kind}. ` +
-    `This balance covers only the native ${chain.symbol} token and does not include ERC-20 holdings.`;
+    `The address ${subject} currently has a native-coin balance of ${balance} ${chain.symbol} ` +
+    `on ${chain.name}, equal to ${balanceWei.toString()} wei. This was determined by querying ` +
+    `the eth_getBalance RPC method against the ${chain.name} network. It is ` +
+    `${/^[aeiou]/i.test(kind) ? 'an' : 'a'} ${kind}, and the figure covers only the native ` +
+    `${chain.symbol} token, not ERC-20 holdings.`;
 
   return {
     address: normalized,
