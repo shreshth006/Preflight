@@ -440,3 +440,33 @@ yet been observed.
 
 **Conclusion:** Parsing and data-source correctness verified; scoring effect
 pending epoch 291 or later.
+
+### v0.6 — Resolver-boundary classification and reproducible receipt capture (2026-08-29)
+
+**Change:** DNS lookup failures are now wrapped at the resolver boundary, so
+platform-specific resolver errors such as Vercel's `getaddrinfo EBUSY` cannot
+be misclassified as TCP failures. The Telegraph adapter consequently reports
+`failure_stage: dns` and no longer claims DNS resolution completed. Added a
+score snapshot command that captures the exact question, ground truth, raw
+answer, converted answer, leader, rank and normalized score for every
+registered intent. The public benchmark now uses conservative nearest-rank
+percentiles.
+
+**Hypothesis:** Correct failure-stage facts should preserve more of the useful
+certificate-analysis context through Telegraph's answer conversion, without
+claiming checks that never ran. Exact receipt capture prevents future changes
+from being judged against copied or Miner-level averages. Nearest-rank p95/p99
+prevents one timeout from being hidden by a small corpus.
+
+**Before:** Epoch 290 reported `api.example.com` as a connection failure after
+`getaddrinfo EBUSY`, and the response listed DNS resolution under completed
+checks. The 18-case benchmark reported p95 `965 ms` despite one `15002 ms`
+timeout because its percentile index selected the 17th rather than 18th value.
+
+**After:** The exact resolver condition is covered by a regression test and is
+classified as `DNS_FAILURE`; 59 tests pass. The same 18/18 benchmark remains
+100% correct and now truthfully reports p95/p99 around `15004 ms` for that run.
+No post-deployment Telegraph score has yet been observed.
+
+**Conclusion:** Keep the correctness and measurement fixes. Scoring effect is
+pending epoch 291 or later; the latency outlier is visible rather than hidden.

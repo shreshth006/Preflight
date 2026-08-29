@@ -7,7 +7,7 @@ import {
   type TLSVerificationOptions,
   type TLSVerificationResult,
 } from './types.js';
-import { resolveDeterministically } from './dns.js';
+import { DNSResolutionError, resolveDeterministically } from './dns.js';
 import { parseSubjectAlternativeNames, parseTarget } from './hostname.js';
 import { isSafeAddress } from '../security/ssrf.js';
 
@@ -315,7 +315,10 @@ export async function verifyTLS(
       ? 'CONNECTION_FAILURE'
       : isTimeout(error)
         ? 'TIMEOUT'
-        : code === 'ENOTFOUND' || code === 'EAI_AGAIN' || /DNS/i.test(message)
+        : error instanceof DNSResolutionError ||
+            code === 'ENOTFOUND' ||
+            code === 'EAI_AGAIN' ||
+            /DNS/i.test(message)
           ? 'DNS_FAILURE'
           : 'CONNECTION_FAILURE';
     result.failureMessage = message;

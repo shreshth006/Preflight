@@ -81,6 +81,9 @@ curl 'http://127.0.0.1:3000/gas-price?chain=base'
 - `npm run validate:config` — validate the YAML, including that every declared
   intent maps to an endpoint that exists.
 - `npm run benchmark` / `npm run benchmark:json` — maintained TLS corpus.
+- `npm run --silent inspect:scoring -- --json` — capture the latest exact question,
+  ground truth, converted answer, score, rank, leader, and normalized score for
+  every registered intent. Pin a receipt with `-- --epoch=290 --intent=GAS_PRICE`.
 - `scripts/sync-miner.sh` — publish the current `miner.yaml` on-chain in one
   step. Dry run unless `EXECUTE_ONCHAIN=YES`. See
   [`docs/TELEGRAPH-INTEGRATION.md`](docs/TELEGRAPH-INTEGRATION.md).
@@ -88,7 +91,7 @@ curl 'http://127.0.0.1:3000/gas-price?chain=base'
   running instance and assert the verdicts. Exits non-zero on any failure, so
   it can gate a deploy. Defaults to production.
 - `scripts/verify-registration.sh` / `scripts/inspect-scoring.sh` — inspect a
-  registration or live score data.
+  registration or produce the same live score snapshot from a shell.
 
 ## Documentation
 

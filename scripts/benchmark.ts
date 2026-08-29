@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { nearestRankPercentile } from '../src/observability/benchmark.js';
 import { verifyTLS } from '../src/tls/verify.js';
 import { toTelegraphResponse } from '../src/telegraph/response.js';
 
@@ -56,8 +57,6 @@ for (const item of cases) {
 }
 
 const latencies = results.map((item) => item.latencyMs).sort((a, b) => a - b);
-const percentile = (p: number): number =>
-  latencies[Math.min(latencies.length - 1, Math.floor((latencies.length - 1) * p))] ?? 0;
 const correct = results.filter((item) => item.correct).length;
 const reasonCounts = Object.fromEntries(
   [...new Set(results.map((item) => item.failureCode))]
@@ -71,9 +70,9 @@ const summary = {
   errors: results.filter((item) => item.actualVerdict === 'error').length,
   accuracy: correct / results.length,
   averageLatencyMs: results.reduce((sum, item) => sum + item.latencyMs, 0) / results.length,
-  p50: percentile(0.5),
-  p95: percentile(0.95),
-  p99: percentile(0.99),
+  p50: nearestRankPercentile(latencies, 0.5),
+  p95: nearestRankPercentile(latencies, 0.95),
+  p99: nearestRankPercentile(latencies, 0.99),
   failuresByReason: reasonCounts,
   results,
 };

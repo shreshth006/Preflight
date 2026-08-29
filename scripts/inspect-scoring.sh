@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-: "${TELEGRAPH_NODE_URL:=https://devnode.telegraphprotocol.com}"
-curl --fail --silent --show-error "$TELEGRAPH_NODE_URL/api/miners" | jq '[.[] | select(.supported_intents | index("SSL_VERIFICATION")) | {id,slug,activation_status,total_requests_served,scored,scores}]'
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+exec "$ROOT_DIR/node_modules/.bin/tsx" "$ROOT_DIR/scripts/inspect-scoring.ts" "$@"

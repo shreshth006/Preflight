@@ -46,3 +46,23 @@ repository.
    certificate.
 5. Never relax SSRF blocking in production to work around a target-specific
    issue. Use `ALLOW_PRIVATE_TARGETS=true` only for isolated local tests.
+
+## Score receipt capture
+
+Capture the latest receipt for every registered intent without copying values
+from the Explorer UI:
+
+```bash
+npm run --silent inspect:scoring -- --json > score-snapshot.json
+```
+
+For a reproducible scorer experiment, pin both dimensions:
+
+```bash
+npm run --silent inspect:scoring -- --epoch=290 --intent=SSL_VERIFICATION --json
+```
+
+The report includes the exact question, ground truth, raw Miner answer,
+Telegraph-converted answer, leader, rank, score, and score normalized to the
+leader. Keep snapshots containing observed scores out of source control unless
+they are intentionally summarized in `docs/SCORING-LOG.md`.

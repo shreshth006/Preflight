@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "benchmark": "tsx scripts/benchmark.ts",
     "benchmark:json": "tsx scripts/benchmark.ts --json",
+    "inspect:scoring": "tsx scripts/inspect-scoring.ts",
     "validate:config": "tsx scripts/validate-miner-config.ts",
     "format:check": "prettier --check src scripts tests package.json tsconfig.json tsconfig.build.json eslint.config.js .prettierrc.json telegraph/miner.yaml docs README.md .github/workflows/ci.yml"
   },
