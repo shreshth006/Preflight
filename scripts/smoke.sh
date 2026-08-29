@@ -25,6 +25,10 @@ CASES=(
   "gas-price|chain=ethereum|"
   "wallet-balance|address=vitalik.eth|funded"
   "wallet-balance|address=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&chain=ethereum|empty"
+  # Epoch 292 regressions: both used to return HTTP 400, which guarantees that
+  # the scorer receives no prose at all.
+  "wallet-balance|chain=base&question=What%20is%20the%20current%20native%20coin%20balance%20of%20wallet%20address%20on%20the%20Base%20chain%3F|not_found"
+  "wallet-balance|chain=base&question=What%20is%20the%20balance%20of%20%25%5B0x1234567890abcdef1234567890abcdef123456789%5D%25%20on%20Base%3F|empty"
   "tx-lookup|hash=${TX}&chain=base-sepolia|success"
   "tvl|protocol=aave|protocol"
   "crypto-price|asset=BTC|found"

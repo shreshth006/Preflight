@@ -143,14 +143,20 @@ async function fetchAnswer(intent, question) {
   const build = ENDPOINTS[intent];
   if (!build) return null;
   const path = build(question);
-  try {
-    const r = await fetch(`${BASE}${path}`, { signal: AbortSignal.timeout(30_000) });
-    if (!r.ok) return null;
-    const body = await r.json();
-    return typeof body.reason === 'string' ? body.reason : null;
-  } catch {
-    return null;
+  // A transient deployment or network failure must not silently remove a
+  // truth from the robust sample. One retry is cheap (these are idempotent
+  // GETs) and the caller still reports any pair it could not score.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const r = await fetch(`${BASE}${path}`, { signal: AbortSignal.timeout(30_000) });
+      if (!r.ok) continue;
+      const body = await r.json();
+      if (typeof body.reason === 'string') return body.reason;
+    } catch {
+      // Retry once, then let the caller expose the missing answer.
+    }
   }
+  return null;
 }
 
 async function rank(receipts, champions, only) {
@@ -210,22 +216,37 @@ async function robust(receipts, champions, only) {
   console.log('-'.repeat(74));
   for (const [intent, path] of [...champions].sort()) {
     if (only && intent !== only) continue;
-    const rows = receipts.filter((r) => r.intent === intent && r.converted_answer);
+    // Our live answer can still be scored for an epoch where every historical
+    // miner failed to return prose. Keeping only non-empty historical answers
+    // would erase those (often hardest) truths from the sample.
+    const rows = receipts.filter(
+      (r) =>
+        r.intent === intent && typeof r.question === 'string' && typeof r.ground_truth === 'string',
+    );
     if (rows.length === 0) continue;
-    const byQ = new Map();
+    // A repeated question does not imply a repeated target. The daemon
+    // regenerates ground truth every epoch, so key the replay corpus by both
+    // dimensions. Grouping only by question silently selected the first truth
+    // and discarded later truth shapes -- exactly the overfitting this mode is
+    // meant to detect.
+    const byPair = new Map();
     for (const r of rows) {
-      if (!byQ.has(r.question)) byQ.set(r.question, []);
-      byQ.get(r.question).push(r);
+      const key = JSON.stringify([r.question, r.ground_truth]);
+      if (!byPair.has(key)) byPair.set(key, []);
+      byPair.get(key).push(r);
     }
     const mod = await loadScorer(path, intent);
     const scores = [];
     let beats = 0;
-    for (const [question, group] of byQ) {
-      const answer = await fetchAnswer(intent, question);
+    const answers = new Map();
+    for (const group of byPair.values()) {
+      const { question, ground_truth: groundTruth } = group[0];
+      if (!answers.has(question)) answers.set(question, fetchAnswer(intent, question));
+      const answer = await answers.get(question);
       if (!answer) continue;
       let v;
       try {
-        v = mod.score(question, group[0].ground_truth, answer);
+        v = mod.score(question, groundTruth, answer);
       } catch {
         continue;
       }
@@ -240,8 +261,10 @@ async function robust(receipts, champions, only) {
     const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
     const min = Math.min(...scores);
     const near = scores.filter((v) => v > 0.9).length;
+    const coverage =
+      scores.length === byPair.size ? String(scores.length) : `${scores.length}/${byPair.size}`;
     console.log(
-      `${intent.padEnd(22)} ${String(scores.length).padStart(5)}   ${mean.toFixed(4)}   ${min.toFixed(4)}   ` +
+      `${intent.padEnd(22)} ${coverage.padStart(5)}   ${mean.toFixed(4)}   ${min.toFixed(4)}   ` +
         `${String(near).padStart(2)}/${scores.length}    ${beats}/${scores.length}`,
     );
   }
