@@ -74,6 +74,26 @@ endpoints:
     external_path: /tvl
     method: GET
     description: Total value locked for a DeFi protocol or chain, mirrored from DefiLlama.
+  - path: /fx-rate
+    external_path: /fx-rate
+    method: GET
+    description: >
+      Mid-market foreign exchange rate between two currencies, named as ISO
+      4217 codes or common names, with the inverse rate and an optional
+      converted amount.
+  - path: /ip-geolocation
+    external_path: /ip-geolocation
+    method: GET
+    description: >
+      Geolocation of an IPv4 or IPv6 address, with city, region, country,
+      coordinates, timezone, ISP and autonomous system. Private and reserved
+      ranges are reported as such rather than as a lookup failure.
+  - path: /stock-price
+    external_path: /stock-price
+    method: GET
+    description: >
+      Current equity quote by ticker or company name, with the previous close,
+      the day's change and the listing venue.
 
 input_schema:
   type: object
@@ -107,6 +127,17 @@ input_schema:
     asset:
       type: string
       description: Cryptocurrency ticker or name. Used by /crypto-price.
+    pair:
+      type: string
+      description: >
+        Currency pair or a question naming two currencies, as ISO 4217 codes or
+        common names. Used by /fx-rate.
+    ip:
+      type: string
+      description: IPv4 or IPv6 address to locate. Used by /ip-geolocation.
+    symbol:
+      type: string
+      description: Equity ticker or company name. Used by /stock-price.
 
 output_schema:
   type: object
@@ -243,3 +274,6 @@ semantics:
     - ONCHAIN_TX_LOOKUP
     - TVL_LOOKUP
     - CRYPTO_PRICE
+    - CURRENCY_EXCHANGE
+    - IP_GEOLOCATION
+    - STOCK_PRICE

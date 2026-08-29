@@ -27,6 +27,9 @@ import { getWalletBalance } from '../intents/walletBalance.js';
 import { lookupTransaction } from '../intents/onchainTx.js';
 import { describeDocumentedIncident, scanUrl } from '../intents/urlScan.js';
 import { lookupTvl } from '../intents/tvl.js';
+import { getExchangeRate } from '../intents/currencyExchange.js';
+import { locateIp } from '../intents/ipGeolocation.js';
+import { getStockPrice } from '../intents/stockPrice.js';
 import { getCryptoPrice } from '../intents/cryptoPrice.js';
 import type { AppConfig } from './config.js';
 import { createLogger } from '../observability/logger.js';
@@ -117,6 +120,32 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
       const subject = findSubject(values) ?? values.all()[0];
       if (!subject) throw new TypeError('missing required field: asset');
       return getCryptoPrice(subject, new Date(), values.all().join(' '));
+    },
+  },
+  '/fx-rate': {
+    intent: 'CURRENCY_EXCHANGE',
+    handle: async (values) => {
+      // The pair may be named as codes, as words, or inside a whole question,
+      // so the full request text is what gets scanned.
+      const text = values.all().join(' ');
+      if (!text) throw new TypeError('missing required field: pair');
+      return getExchangeRate(text);
+    },
+  },
+  '/ip-geolocation': {
+    intent: 'IP_GEOLOCATION',
+    handle: async (values) => {
+      const text = values.all().join(' ');
+      if (!text) throw new TypeError('missing required field: ip');
+      return locateIp(text);
+    },
+  },
+  '/stock-price': {
+    intent: 'STOCK_PRICE',
+    handle: async (values) => {
+      const subject = findSubject(values) ?? values.all()[0];
+      if (!subject) throw new TypeError('missing required field: symbol');
+      return getStockPrice(values.all().join(' '));
     },
   },
   '/tvl': {
