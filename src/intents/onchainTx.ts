@@ -189,7 +189,7 @@ export async function lookupTransaction(
         // question asks about by name, and the digit is the token a ground truth
         // stating the amount will carry.
         `It sent 0 ${chain.symbol}`
-      : `It sent ${value} ${chain.symbol}`;
+      : `It sent ${valueExact ?? value} ${chain.symbol}`;
   const parties = selfTransfer
     ? `from ${tx.from} back to the same address ${tx.to}, so the sender and the recipient are identical and this was a self-transfer`
     : `from ${tx.from ?? 'an unknown sender'} to ${
