@@ -57,6 +57,18 @@
     {
       "source": "/crypto-price",
       "destination": "/api/index"
+    },
+    {
+      "source": "/fx-rate",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/ip-geolocation",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/stock-price",
+      "destination": "/api/index"
     }
   ]
 }
