@@ -76,21 +76,18 @@ export async function getWalletBalance(
         : accountType === 'eoa'
           ? 'externally owned account'
           : 'account';
-  const activity =
-    nonce === null
-      ? ''
-      : nonce === 0
-        ? ` It has sent no outbound transactions on this chain.`
-        : ` It has sent ${nonce} outbound transaction${nonce === 1 ? '' : 's'} on this chain.`;
-  const blockSentence = blockNumber === null ? '' : ` Observed at block ${blockNumber}.`;
   const holding = funded
     ? `holds a balance of ${balance} ${chain.symbol}`
     : `holds no ${chain.symbol} balance (0 ${chain.symbol})`;
 
   const subject = ensName ? `${ensName} (${normalized})` : normalized;
+  // Address, amount and chain are what this intent is asked for, and they lead.
+  // Outbound-transaction count and the observed block follow as structured
+  // fields rather than prose: in ONCHAIN_TX_LOOKUP the same peripheral detail
+  // displaced the addresses from the summary the node actually scores.
   const reason =
     `The address ${subject} on ${chain.name} (chain ID ${chain.chainId}) ${holding}, ` +
-    `equal to ${balanceWei.toString()} wei. It is ${/^[aeiou]/i.test(kind) ? 'an' : 'a'} ${kind}.${activity}${blockSentence} ` +
+    `equal to ${balanceWei.toString()} wei. It is ${/^[aeiou]/i.test(kind) ? 'an' : 'a'} ${kind}. ` +
     `This balance covers only the native ${chain.symbol} token and does not include ERC-20 holdings.`;
 
   return {

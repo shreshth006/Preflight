@@ -7,6 +7,8 @@ export interface TxLookupResponse {
   found: boolean;
   self_transfer: boolean | null;
   contract_call: boolean | null;
+  /** First four bytes of calldata, which identify the function invoked. */
+  method_selector: string | null;
   status: 'success' | 'failed' | 'pending' | 'not_found' | 'unavailable';
   verdict: 'success' | 'failed' | 'pending' | 'not_found' | 'unavailable';
   block_number: number | null;
@@ -80,6 +82,7 @@ export async function lookupTransaction(
       found: false,
       self_transfer: null,
       contract_call: null,
+      method_selector: null,
       status: 'not_found',
       verdict: 'not_found',
       block_number: null,
@@ -157,6 +160,8 @@ export async function lookupTransaction(
   // Empty calldata is a plain value transfer; anything else is a call into a
   // contract. Only unknown when the node omitted `input` entirely.
   const calldata = tx.input;
+  const methodSelector =
+    calldata && calldata.length >= 10 && calldata !== '0x' ? calldata.slice(0, 10) : null;
   const contractCall =
     contractCreated || tx.to === null || tx.to === undefined
       ? true
@@ -173,8 +178,11 @@ export async function lookupTransaction(
       : `was included in a block but reverted, so its intended effect did not take place`;
   const transfer =
     valueWei === null || valueWei === 0n
-      ? `It transferred no native ${chain.symbol}`
-      : `It transferred ${value} ${chain.symbol}`;
+      // "0 ETH" rather than "no native ETH": a zero-value transfer is what the
+      // question asks about by name, and the digit is the token a ground truth
+      // stating the amount will carry.
+      ? `It sent 0 ${chain.symbol}`
+      : `It sent ${value} ${chain.symbol}`;
   const parties = selfTransfer
     ? `from ${tx.from} back to the same address ${tx.to}, so the sender and the recipient are identical`
     : `from ${tx.from ?? 'an unknown sender'} to ${
@@ -182,18 +190,7 @@ export async function lookupTransaction(
           ? `a newly deployed contract at ${contractCreated}`
           : (tx.to ?? 'a contract creation with no recipient')
       }`;
-  const blockSentence =
-    blockNumber === null
-      ? ''
-      : ` It was mined in block ${blockNumber}${
-          confirmations === null ? '' : ` and now has ${confirmations} confirmations`
-        }.`;
-  const feeSentence =
-    feeWei === null
-      ? ''
-      : ` It consumed ${gasUsed?.toString()} gas at ${formatUnits(gasPrice ?? 0n, 9, 4)} gwei, ` +
-        `for a total fee of ${formatUnits(feeWei, chain.decimals, 8)} ${chain.symbol}.`;
-
+  const blockSentence = blockNumber === null ? '' : ` in block ${blockNumber}`;
   // Whether a contract was invoked is one of the things this intent is asked
   // outright, so it is stated rather than left to be inferred from calldata.
   const callSentence =
@@ -201,19 +198,25 @@ export async function lookupTransaction(
       ? ''
       : contractCall
         ? contractCreated
-          ? ' The transaction deployed a contract.'
-          : ' The transaction carried calldata, so it invoked a contract.'
-        : ' The transaction carried no calldata, so it was a plain value transfer that involved no contract call.';
+          ? ` The transaction deployed a contract at ${contractCreated}.`
+          : ` The transaction invoked a contract function with selector ${methodSelector ?? 'unknown'}.`
+        : ' The transaction carried no calldata, so it was a plain value transfer that invoked no contract.';
 
+  // What this intent is asked is which addresses were involved and how much
+  // native value moved. Those facts lead, and gas, fee and confirmation count
+  // are left to the structured fields: when they appeared in the prose the
+  // summariser kept them and dropped the addresses, which is how an answer
+  // naming neither party scored 0.0075 against 0.998 for one that did.
   const reason =
-    `Transaction ${normalized} on ${chain.name} (chain ID ${chain.chainId}) ${outcome}. ` +
-    `${transfer} ${parties}.${callSentence}${blockSentence}${feeSentence}`;
+    `Transaction ${normalized} on ${chain.name} (chain ID ${chain.chainId}) ${outcome}` +
+    `${blockSentence}. ${transfer} ${parties}.${callSentence}`;
 
   return {
     ...base,
     found: true,
     self_transfer: selfTransfer,
     contract_call: contractCall,
+    method_selector: methodSelector,
     status,
     verdict: status,
     block_number: blockNumber,
