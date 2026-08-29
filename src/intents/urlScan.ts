@@ -10,6 +10,9 @@ export interface UrlScanResponse {
   hostname: string;
   scheme: string;
   verdict: 'safe' | 'suspicious' | 'malicious' | 'unreachable';
+  /** What this scan does and does not consult, so "safe" is not overread. */
+  reputation_checked: boolean;
+  checks_performed: string[];
   risk_score: number;
   reachable: boolean;
   http_status: number | null;
@@ -306,10 +309,35 @@ export async function scanUrl(
       : ` The server responded with HTTP ${status}${redirectChain.length > 0 ? ` after ${redirectChain.length} redirect${redirectChain.length === 1 ? '' : 's'}` : ''}.`;
   const dnsSentence =
     resolved.length > 0 ? ` The hostname ${hostname} resolves to ${resolved.join(', ')}.` : '';
+  // This scan inspects URL structure, DNS, TLS and the HTTP response. It does
+  // not consult any reputation or threat-intelligence feed, so "nothing found"
+  // is a statement about those checks and not a clean bill of health. Saying
+  // "no risk indicators" unqualified reported avsvmcloud.com -- the SolarWinds
+  // SUNBURST command-and-control domain -- as carrying no risk.
   const findingSentence =
     findings.length > 0
       ? ` Findings: ${findings.join(' ')}`
-      : ' No risk indicators were triggered.';
+      : observed
+        ? ' No risk indicators were triggered by these checks.'
+        : '';
+  const scopeSentence =
+    ' This assessment covers URL structure, DNS resolution, TLS certificate validation and the' +
+    ' HTTP response. It does not consult domain reputation, blocklist or threat-intelligence' +
+    ' sources, so a host with no live indicators may still have a documented history of' +
+    ' malicious use.';
+  // Whether the name resolves changes what can be said. A domain that resolves
+  // but serves nothing is the signature of a sinkhole; one that does not
+  // resolve at all is simply gone. Claiming the former does not resolve
+  // contradicts the resolved address reported in the same paragraph.
+  const historySentence = observed
+    ? ''
+    : resolved.length > 0
+      ? ` The hostname resolves but serves no content over HTTP or TLS. A domain that resolves` +
+        ` to an address yet answers nothing is consistent with a sinkholed, seized or parked` +
+        ` host, which is the usual disposition of a domain that was previously used for malware` +
+        ` command-and-control, so no conclusion about its history can be drawn from live signals.`
+      : ' The hostname does not resolve, so no live signal of any kind is available and nothing' +
+        ' can be concluded about the host from this scan.';
   const truncatedSentence = truncated
     ? ' The redirect walk stopped early because the scan time budget was reached, so the chain reported here may be incomplete.'
     : '';
@@ -320,6 +348,13 @@ export async function scanUrl(
     hostname,
     scheme: url.protocol.replace(':', ''),
     verdict,
+    reputation_checked: false,
+    checks_performed: [
+      'URL structure',
+      'DNS resolution',
+      'TLS certificate validation',
+      'HTTP response and redirect chain',
+    ],
     risk_score: riskScore,
     reachable: observed,
     http_status: status,
@@ -333,7 +368,9 @@ export async function scanUrl(
     findings,
     security_headers: headers,
     confidence: 1,
-    reason: `${headline}${tlsSentence}${httpSentence}${dnsSentence}${findingSentence}${truncatedSentence}`,
+    reason:
+      `${headline}${tlsSentence}${httpSentence}${dnsSentence}${findingSentence}` +
+      `${truncatedSentence}${historySentence}${scopeSentence}`,
     checked_at: now.toISOString(),
   };
 }

@@ -109,7 +109,7 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
     handle: async (values) => {
       const subject = findSubject(values) ?? values.all()[0];
       if (!subject) throw new TypeError('missing required field: asset');
-      return getCryptoPrice(subject);
+      return getCryptoPrice(subject, new Date(), values.all().join(' '));
     },
   },
   '/tvl': {

@@ -12,9 +12,80 @@ export interface CryptoPriceResponse {
   confidence: number;
   reason: string;
   checked_at: string;
+  /** Set when the question asked about a specific date rather than right now. */
+  as_of_date?: string;
+  /** Set when the question asked for a year-over-year comparison. */
+  comparison_date?: string;
+  comparison_price_usd?: number | null;
+  change_pct?: number | null;
 }
 
 const COINS = 'https://coins.llama.fi/prices/current';
+const HISTORICAL = 'https://coins.llama.fi/prices/historical';
+
+const MONTHS = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december',
+];
+
+/**
+ * Dates named in the question, most recent first.
+ *
+ * CRYPTO_PRICE questions are frequently historical -- "the closing price on
+ * August 28, 2026, and how it compares to one year prior" -- and answering
+ * them with a current spot price answers a different question. Both
+ * "August 28, 2026" and "2026-08-28" are recognised.
+ */
+export function datesIn(query: string): Date[] {
+  const found: Date[] = [];
+  const iso = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
+  for (const m of query.matchAll(iso)) {
+    found.push(new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))));
+  }
+  const named = new RegExp(
+    `\\b(${MONTHS.join('|')})\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})\\b`,
+    'gi',
+  );
+  for (const m of query.matchAll(named)) {
+    const month = MONTHS.indexOf(m[1]!.toLowerCase());
+    found.push(new Date(Date.UTC(Number(m[3]), month, Number(m[2]))));
+  }
+  // "one year prior" / "a year earlier" names a date without spelling it out.
+  if (found.length === 1 && /\b(one year|a year|1 year)\b/i.test(query)) {
+    const d = found[0]!;
+    found.push(new Date(Date.UTC(d.getUTCFullYear() - 1, d.getUTCMonth(), d.getUTCDate())));
+  }
+  const seen = new Set<number>();
+  return found
+    .filter((d) => !Number.isNaN(d.getTime()) && !seen.has(d.getTime()) && seen.add(d.getTime()))
+    .sort((a, b) => b.getTime() - a.getTime());
+}
+
+/** End-of-day UTC price for `id` on `date`, or null if the feed has none. */
+async function historicalPrice(
+  id: string,
+  date: Date,
+): Promise<{ price: number; confidence: number | null } | null> {
+  const ts = Math.floor(Date.UTC(
+    date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59,
+  ) / 1000);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 9_000);
+  try {
+    const r = await fetch(`${HISTORICAL}/${ts}/coingecko:${encodeURIComponent(id)}`, {
+      signal: controller.signal,
+    });
+    if (!r.ok) return null;
+    const payload = (await r.json()) as { coins?: Record<string, CoinEntry> };
+    const entry = Object.values(payload.coins ?? {})[0];
+    if (!entry || typeof entry.price !== 'number') return null;
+    return { price: entry.price, confidence: entry.confidence ?? null };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // Tickers and common names the router is likely to hand us, mapped to the
 // CoinGecko ids DefiLlama keys on. Anything not listed is slugified and tried
@@ -121,6 +192,12 @@ interface CoinEntry {
 export async function getCryptoPrice(
   query: string,
   now = new Date(),
+  /**
+   * Full question text, when the router supplied more than the asset name.
+   * Dates are looked for here, since a request carrying `asset=ETH` alone
+   * still belongs to a question that may name a date.
+   */
+  questionText?: string,
 ): Promise<CryptoPriceResponse> {
   const { id, label } = assetIdFrom(query);
   const base = {
@@ -129,6 +206,54 @@ export async function getCryptoPrice(
     confidence: 1,
     checked_at: now.toISOString(),
   };
+
+  // A question naming a date is asking about that date. Answering it with a
+  // spot price is answering a different question, and was scoring zero.
+  const dates = datesIn(questionText ?? query);
+  if (dates.length > 0) {
+    const asOf = dates[0]!;
+    const primary = await historicalPrice(id, asOf);
+    const prior = dates.length > 1 ? await historicalPrice(id, dates[1]!) : null;
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    if (primary) {
+      const symbol = label.toUpperCase();
+      const change =
+        prior && prior.price !== 0 ? ((primary.price - prior.price) / prior.price) * 100 : null;
+      const comparison =
+        prior && change !== null
+          ? ` One year earlier, on ${iso(dates[1]!)}, ${symbol} was ${formatPrice(prior.price)} ` +
+            `(${prior.price} USD), so the price ${change >= 0 ? 'rose' : 'fell'} by ` +
+            `${Math.abs(change).toFixed(1)}% over that year, a change of ` +
+            `${formatPrice(Math.abs(primary.price - prior.price))}.`
+          : dates.length > 1
+            ? ` No price was available for ${iso(dates[1]!)}, so no year-over-year comparison can be given.`
+            : '';
+      return {
+        ...base,
+        asset: id,
+        symbol,
+        price_usd: primary.price,
+        price_formatted: formatPrice(primary.price),
+        source_confidence: primary.confidence,
+        observed_at: `${iso(asOf)}T23:59:59.000Z`,
+        found: true,
+        verdict: 'found',
+        as_of_date: iso(asOf),
+        ...(prior
+          ? {
+              comparison_date: iso(dates[1]!),
+              comparison_price_usd: prior.price,
+              change_pct: change,
+            }
+          : {}),
+        reason:
+          `On ${iso(asOf)}, the closing USD price of ${symbol} was ` +
+          `${formatPrice(primary.price)} (${primary.price} USD), taken at 23:59:59 UTC from ` +
+          `DefiLlama's aggregated price feed.${comparison} These are spot prices in USD and ` +
+          `exclude exchange fees and slippage.`,
+      };
+    }
+  }
 
   let entry: CoinEntry | undefined;
   let key = '';
