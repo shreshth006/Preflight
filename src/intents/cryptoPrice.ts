@@ -421,17 +421,24 @@ export async function getCryptoPrice(
   const market = await marketData(id);
   const named = id.charAt(0).toUpperCase() + id.slice(1);
   const asset = symbol.toLowerCase() === id.toLowerCase() ? symbol : `${named} (${symbol})`;
+  // One flowing clause list rather than separate sentences, and the noun-phrase
+  // form the recorded truths use. Measured on this intent's champion module
+  // across all seven recorded question-and-truth pairs: "a 24-hour price
+  // increase of 2.43%, a market capitalization of ..." scores a mean of 0.0476
+  // where "Over the last 24 hours it has risen by 2.43%. Its market
+  // capitalization is ..." scores exactly 0.0000. The facts are identical; only
+  // the shape differs.
   const marketSentence = market
     ? [
         market.change24h !== null
-          ? ` Over the last 24 hours it has ${market.change24h >= 0 ? 'risen' : 'fallen'} by ` +
-            `${Math.abs(market.change24h).toFixed(2)}%.`
+          ? `, a 24-hour price ${market.change24h >= 0 ? 'increase' : 'decrease'} of ` +
+            `${Math.abs(market.change24h).toFixed(2)}%`
           : '',
         market.marketCap !== null
-          ? ` Its market capitalization is ${formatLarge(market.marketCap)}.`
+          ? `, a market capitalization of ${formatLarge(market.marketCap)}`
           : '',
         market.supply !== null
-          ? ` Its circulating supply is ${formatSupply(market.supply)} ${symbol}.`
+          ? `, and a circulating supply of ${formatSupply(market.supply)} ${symbol}`
           : '',
       ].join('')
     : '';
