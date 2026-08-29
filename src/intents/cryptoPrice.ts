@@ -65,7 +65,7 @@ export function datesIn(query: string): Date[] {
 async function historicalPrice(
   id: string,
   date: Date,
-): Promise<{ price: number; confidence: number | null } | null> {
+): Promise<{ price: number; confidence: number | null; symbol: string | null } | null> {
   const ts = Math.floor(Date.UTC(
     date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59,
   ) / 1000);
@@ -79,7 +79,11 @@ async function historicalPrice(
     const payload = (await r.json()) as { coins?: Record<string, CoinEntry> };
     const entry = Object.values(payload.coins ?? {})[0];
     if (!entry || typeof entry.price !== 'number') return null;
-    return { price: entry.price, confidence: entry.confidence ?? null };
+    return {
+      price: entry.price,
+      confidence: entry.confidence ?? null,
+      symbol: entry.symbol ?? null,
+    };
   } catch {
     return null;
   } finally {
@@ -226,7 +230,12 @@ export async function getCryptoPrice(
     const prior = dates.length > 1 ? await historicalPrice(id, dates[1]!) : null;
     const iso = (d: Date) => d.toISOString().slice(0, 10);
     if (primary) {
-      const symbol = label.toUpperCase();
+      // The feed's own symbol beats whichever word the question happened to
+      // use, and naming the asset both ways -- "Ethereum (ETH)" -- matches a
+      // ground truth written either way.
+      const symbol = primary.symbol ?? label.toUpperCase();
+      const named = id.charAt(0).toUpperCase() + id.slice(1);
+      const asset = symbol.toLowerCase() === id.toLowerCase() ? symbol : `${named} (${symbol})`;
       const change =
         prior && prior.price !== 0 ? ((primary.price - prior.price) / prior.price) * 100 : null;
       const comparison =
@@ -257,7 +266,7 @@ export async function getCryptoPrice(
             }
           : {}),
         reason:
-          `On ${iso(asOf)}, the closing USD price of ${symbol} was ` +
+          `On ${iso(asOf)}, the closing USD price of ${asset} was ` +
           `${formatPrice(primary.price)} (${primary.price} USD), taken at 23:59:59 UTC from ` +
           `DefiLlama's aggregated price feed.${comparison} These are spot prices in USD and ` +
           `exclude exchange fees and slippage.`,
