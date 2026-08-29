@@ -18,7 +18,11 @@ export const CHAINS: Record<string, ChainInfo> = {
     chainId: 1,
     symbol: 'ETH',
     decimals: 18,
-    rpcUrls: ['https://ethereum-rpc.publicnode.com', 'https://eth.llamarpc.com'],
+    rpcUrls: [
+      'https://ethereum-rpc.publicnode.com',
+      'https://eth.drpc.org',
+      'https://eth.merkle.io',
+    ],
     explorer: 'https://etherscan.io',
   },
   base: {
@@ -27,7 +31,11 @@ export const CHAINS: Record<string, ChainInfo> = {
     chainId: 8453,
     symbol: 'ETH',
     decimals: 18,
-    rpcUrls: ['https://mainnet.base.org', 'https://base-rpc.publicnode.com'],
+    rpcUrls: [
+      'https://mainnet.base.org',
+      'https://base-rpc.publicnode.com',
+      'https://base.drpc.org',
+    ],
     explorer: 'https://basescan.org',
   },
   arbitrum: {
@@ -36,7 +44,11 @@ export const CHAINS: Record<string, ChainInfo> = {
     chainId: 42_161,
     symbol: 'ETH',
     decimals: 18,
-    rpcUrls: ['https://arbitrum-one-rpc.publicnode.com', 'https://arb1.arbitrum.io/rpc'],
+    rpcUrls: [
+      'https://arbitrum-one-rpc.publicnode.com',
+      'https://arb1.arbitrum.io/rpc',
+      'https://arbitrum.drpc.org',
+    ],
     explorer: 'https://arbiscan.io',
   },
   optimism: {
@@ -45,7 +57,11 @@ export const CHAINS: Record<string, ChainInfo> = {
     chainId: 10,
     symbol: 'ETH',
     decimals: 18,
-    rpcUrls: ['https://optimism-rpc.publicnode.com', 'https://mainnet.optimism.io'],
+    rpcUrls: [
+      'https://optimism-rpc.publicnode.com',
+      'https://mainnet.optimism.io',
+      'https://optimism.drpc.org',
+    ],
     explorer: 'https://optimistic.etherscan.io',
   },
   polygon: {
@@ -54,7 +70,10 @@ export const CHAINS: Record<string, ChainInfo> = {
     chainId: 137,
     symbol: 'POL',
     decimals: 18,
-    rpcUrls: ['https://polygon-bor-rpc.publicnode.com', 'https://polygon-rpc.com'],
+    rpcUrls: [
+      'https://polygon-bor-rpc.publicnode.com',
+      'https://polygon.drpc.org',
+    ],
     explorer: 'https://polygonscan.com',
   },
   'base-sepolia': {
@@ -63,7 +82,7 @@ export const CHAINS: Record<string, ChainInfo> = {
     chainId: 84_532,
     symbol: 'ETH',
     decimals: 18,
-    rpcUrls: ['https://sepolia.base.org'],
+    rpcUrls: ['https://sepolia.base.org', 'https://base-sepolia-rpc.publicnode.com'],
     explorer: 'https://sepolia.basescan.org',
   },
 };
