@@ -35,9 +35,15 @@ const ENDPOINTS = {
   URL_SCAN: (q) => `/url-scan?question=${encodeURIComponent(q)}${urlFrom(q) ? `&url=${encodeURIComponent(urlFrom(q))}` : ''}`,
   GAS_PRICE: () => `/gas-price?chain=ethereum`,
   ONCHAIN_TX_LOOKUP: (q) => `/tx-lookup?chain=ethereum&hash=${encodeURIComponent(hashFrom(q) ?? '')}`,
-  TVL_LOOKUP: (q) => `/tvl?protocol=${encodeURIComponent(protocolFrom(q))}&chain=ethereum`,
+  TVL_LOOKUP: (q) =>
+    `/tvl?protocol=${encodeURIComponent(protocolFrom(q))}&chain=ethereum&question=${encodeURIComponent(q)}`,
   CRYPTO_PRICE: (q) => `/crypto-price?question=${encodeURIComponent(q)}`,
-  WALLET_BALANCE_CHECK: (q) => `/wallet-balance?chain=${encodeURIComponent(chainFrom(q))}&address=${encodeURIComponent(addressFrom(q) ?? '')}`,
+  // The question is passed alongside the extracted parameter, because the
+  // parameters alone lose information the endpoint uses -- a malformed address
+  // in the question text is invisible once only a well-formed one is extracted.
+  WALLET_BALANCE_CHECK: (q) =>
+    `/wallet-balance?chain=${encodeURIComponent(chainFrom(q))}` +
+    `&address=${encodeURIComponent(addressFrom(q) ?? '')}&question=${encodeURIComponent(q)}`,
   CURRENCY_EXCHANGE: (q) => `/fx-rate?pair=${encodeURIComponent(q)}`,
   IP_GEOLOCATION: (q) => `/ip-geolocation?ip=${encodeURIComponent(ipFrom(q) ?? '')}`,
   STOCK_PRICE: (q) => `/stock-price?symbol=${encodeURIComponent(q)}`,
