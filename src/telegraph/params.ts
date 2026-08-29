@@ -133,3 +133,29 @@ export function findSubject(values: RequestValues): string | undefined {
     'question',
   ]);
 }
+
+/**
+ * Resolve the protocol/chain named by a TVL question without treating the
+ * whole natural-language question as a DefiLlama slug.
+ */
+export function findTvlSubject(values: RequestValues): string | undefined {
+  const direct = values.get(['protocol', 'project', 'slug', 'name']);
+  if (direct) return direct;
+
+  for (const value of values.all()) {
+    const text = value.trim();
+    const protocol = /\b(?:in|of|for)\s+(?:the\s+)?(.+?)\s+protocol\b/i.exec(text)?.[1];
+    if (protocol?.trim()) return protocol.trim();
+
+    const tvl =
+      /\b(?:tvl|total\s+value\s+locked)\s+(?:in|of|for)\s+(?:the\s+)?(.+?)(?=\s+(?:on|across)\s+(?:the\s+)?[a-z0-9-]+(?:\s+(?:chain|network))?|\s+as\s+of\b|[?.!,]|$)/i.exec(
+        text,
+      )?.[1];
+    if (tvl?.trim()) return tvl.replace(/\s+protocol$/i, '').trim();
+
+    // A direct query such as `aave-v3` remains a valid subject. Question-like
+    // prose is not returned wholesale because it would become an invalid slug.
+    if (!/\s/.test(text) && /^[a-z0-9._-]+$/i.test(text)) return text;
+  }
+  return undefined;
+}

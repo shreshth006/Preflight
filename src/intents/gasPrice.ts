@@ -7,6 +7,8 @@ export interface GasPriceResponse {
   gas_price_gwei: string;
   base_fee_gwei: string | null;
   priority_fee_gwei: string | null;
+  priority_fee_source: 'fee_history_median' | 'rpc_suggestion' | null;
+  fee_history_blocks: number;
   block_number: number | null;
   transfer_cost_native: string;
   transfer_cost_gwei: string;
@@ -20,6 +22,24 @@ export interface GasPriceResponse {
 
 const GWEI_DECIMALS = 9;
 const TRANSFER_GAS = 21_000n;
+const FEE_HISTORY_BLOCKS = 5;
+
+interface FeeHistory {
+  reward?: string[][];
+}
+
+/** Deterministic median for the per-block priority-fee rewards in fee history. */
+export function medianPriorityFee(history: FeeHistory | null): bigint | null {
+  const values = (history?.reward ?? [])
+    .map((row) => row[0])
+    .filter((value): value is string => typeof value === 'string')
+    .map(hexToBigInt)
+    .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+  if (values.length === 0) return null;
+  const middle = Math.floor(values.length / 2);
+  if (values.length % 2 === 1) return values[middle] ?? null;
+  return ((values[middle - 1] ?? 0n) + (values[middle] ?? 0n)) / 2n;
+}
 
 function classify(gwei: number): GasPriceResponse['level'] {
   if (gwei < 1) return 'low';
@@ -39,6 +59,7 @@ export async function getGasPrice(chain: ChainInfo, now = new Date()): Promise<G
   // an error for the request as a whole.
   let baseFee: bigint | null = null;
   let priorityFee: bigint | null = null;
+  let priorityFeeSource: GasPriceResponse['priority_fee_source'] = null;
   try {
     const block = await rpcCall<{ baseFeePerGas?: string }>(chain, 'eth_getBlockByNumber', [
       'latest',
@@ -49,10 +70,25 @@ export async function getGasPrice(chain: ChainInfo, now = new Date()): Promise<G
     baseFee = null;
   }
   try {
-    const tip = await rpcCall<string>(chain, 'eth_maxPriorityFeePerGas', []);
-    priorityFee = hexToBigInt(tip);
+    const history = await rpcCall<FeeHistory>(chain, 'eth_feeHistory', [
+      `0x${FEE_HISTORY_BLOCKS.toString(16)}`,
+      'latest',
+      [50],
+    ]);
+    priorityFee = medianPriorityFee(history);
+    if (priorityFee !== null) priorityFeeSource = 'fee_history_median';
   } catch {
     priorityFee = null;
+  }
+  if (priorityFee === null) {
+    try {
+      const tip = await rpcCall<string>(chain, 'eth_maxPriorityFeePerGas', []);
+      priorityFee = hexToBigInt(tip);
+      priorityFeeSource = 'rpc_suggestion';
+    } catch {
+      priorityFee = null;
+      priorityFeeSource = null;
+    }
   }
 
   const gwei = formatUnits(gasPrice, GWEI_DECIMALS, 4);
@@ -67,12 +103,21 @@ export async function getGasPrice(chain: ChainInfo, now = new Date()): Promise<G
 
   const feeParts: string[] = [];
   if (baseFeeGwei !== null) feeParts.push(`a base fee of ${baseFeeGwei} gwei`);
-  if (priorityGwei !== null) feeParts.push(`a suggested priority fee of ${priorityGwei} gwei`);
+  if (priorityGwei !== null) {
+    const priorityDescription =
+      priorityFeeSource === 'fee_history_median'
+        ? `a median priority fee of ${priorityGwei} gwei across the latest ${FEE_HISTORY_BLOCKS} blocks`
+        : `an RPC-suggested priority fee of ${priorityGwei} gwei`;
+    feeParts.push(priorityDescription);
+  }
   const feeSentence =
     feeParts.length > 0
       ? ` The latest block carries ${feeParts.join(' and ')}.`
       : ' This chain does not report an EIP-1559 base fee.';
-  const blockSentence = blockNumber === null ? '' : ` Observed at block ${blockNumber}.`;
+  const blockSentence =
+    blockNumber === null
+      ? ` Observed at ${now.toISOString()}.`
+      : ` Observed at ${chain.name} block ${blockNumber} at ${now.toISOString()}.`;
 
   const reason =
     `The current gas price on ${chain.name} (chain ID ${chain.chainId}) is ${gwei} gwei, ` +
@@ -87,6 +132,8 @@ export async function getGasPrice(chain: ChainInfo, now = new Date()): Promise<G
     gas_price_gwei: gwei,
     base_fee_gwei: baseFeeGwei,
     priority_fee_gwei: priorityGwei,
+    priority_fee_source: priorityFeeSource,
+    fee_history_blocks: priorityFeeSource === 'fee_history_median' ? FEE_HISTORY_BLOCKS : 0,
     block_number: blockNumber,
     transfer_cost_native: transferNative,
     transfer_cost_gwei: formatUnits(transferWei, GWEI_DECIMALS, 4),

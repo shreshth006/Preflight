@@ -9,6 +9,7 @@ import {
   findChain,
   findEnsName,
   findSubject,
+  findTvlSubject,
   findTxHash,
   findUrl,
   valuesFromBody,
@@ -120,11 +121,11 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
   '/tvl': {
     intent: 'TVL_LOOKUP',
     handle: async (values) => {
-      const subject = findSubject(values) ?? values.all()[0];
+      const subject = findTvlSubject(values);
       if (!subject) throw new TypeError('missing required field: protocol');
       // "Aave V3 on the Ethereum chain" asks for that chain's share, not the
       // protocol total across every deployment.
-      const named = findChain(values);
+      const named = findChain(values) ?? chainFromText(values.text())?.key;
       return lookupTvl(subject, new Date(), lookupChain(named ?? '')?.name);
     },
   },

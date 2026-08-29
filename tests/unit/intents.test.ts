@@ -13,11 +13,13 @@ import {
   findChain,
   findEnsName,
   findTxHash,
+  findTvlSubject,
   findUrl,
   valuesFromBody,
   valuesFromQuery,
 } from '../../src/telegraph/params.js';
 import { formatUsd } from '../../src/intents/tvl.js';
+import { medianPriorityFee } from '../../src/intents/gasPrice.js';
 
 const q = (search: string): URLSearchParams => new URLSearchParams(search);
 
@@ -57,6 +59,19 @@ describe('unit formatting', () => {
     expect(formatUsd(18_195_729_011)).toBe('$18.20 billion');
     expect(formatUsd(5_512_000)).toBe('$5.51 million');
     expect(formatUsd(42)).toBe('$42.00');
+  });
+});
+
+describe('gas fee history', () => {
+  it('uses the deterministic median reward rather than an unstable RPC suggestion', () => {
+    expect(
+      medianPriorityFee({
+        reward: [['0x64'], ['0x1'], ['0x5'], ['0x3'], ['0x7']],
+      }),
+    ).toBe(5n);
+    expect(medianPriorityFee({ reward: [['0x2'], ['0x8']] })).toBe(5n);
+    expect(medianPriorityFee({ reward: [] })).toBeNull();
+    expect(medianPriorityFee(null)).toBeNull();
   });
 });
 
@@ -100,6 +115,20 @@ describe('tolerant parameter extraction', () => {
   it('returns undefined when nothing usable is present', () => {
     expect(findAddress(valuesFromQuery(q('q=hello world')))).toBeUndefined();
     expect(findTxHash(valuesFromBody({}))).toBeUndefined();
+  });
+
+  it('extracts a TVL subject from router-shaped natural language', () => {
+    expect(
+      findTvlSubject(
+        valuesFromQuery(
+          q(
+            'query=What+is+the+current+total+value+locked+%28TVL%29+in+the+Aave+V3+protocol+on+the+Ethereum+chain%3F',
+          ),
+        ),
+      ),
+    ).toBe('Aave V3');
+    expect(findTvlSubject(valuesFromQuery(q('query=What+is+the+TVL+of+Base%3F')))).toBe('Base');
+    expect(findTvlSubject(valuesFromBody({ protocol: 'lido' }))).toBe('lido');
   });
 });
 

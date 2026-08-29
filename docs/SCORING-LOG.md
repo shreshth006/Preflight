@@ -413,3 +413,30 @@ reported only current reachability and omitted the named SUNBURST incident.
 
 **Conclusion:** Pending the next scored URL_SCAN receipt. Change one reference
 dimension at a time if the score remains below the historical leaders.
+
+### v0.5 — Router-shaped TVL input and deterministic priority fee (2026-08-29)
+
+**Change:** A full natural-language TVL question is now reduced to its named
+protocol before querying DefiLlama, and a chain named inside that question is
+preserved as the requested scope. GAS_PRICE now uses the median 50th-percentile
+priority reward across five recent blocks, falling back to
+`eth_maxPriorityFeePerGas` only when fee history is unavailable.
+
+**Hypothesis:** Telegraph's router can pass the entire question under `query`.
+Treating that sentence as a protocol slug returns a false `not_found` result.
+For gas, a recent-block median is more reproducible and representative than a
+single provider's suggestion, which returned zero in epoch 290 while the
+leading miner reported a nonzero median.
+
+**Before:** In a local replay of the exact epoch-290 TVL question, the endpoint
+queried the whole sentence and returned `not_found`. PREFLIGHT's epoch-290 gas
+answer reported priority fee `0 gwei` and scored `0.0000000000018765042`.
+
+**After:** Live local replay resolves `Aave V3`, reports the Ethereum-scoped
+TVL and the all-chain total separately, and returns `verdict: protocol`.
+Ethereum fee-history replay reported a nonzero five-block median and included
+the observation block and timestamp. No post-deployment Telegraph score has
+yet been observed.
+
+**Conclusion:** Parsing and data-source correctness verified; scoring effect
+pending epoch 291 or later.
