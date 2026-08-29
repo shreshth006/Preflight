@@ -374,10 +374,6 @@ export async function scanUrl(
   // risk score: the score describes what this scan observed now, and the
   // reference material describes what was reported at the time.
   const reference = threatReferenceFor(hostname, questionText);
-  const documentedSentence = reference
-    ? ` This host and campaign are documented in public reporting on ${reference.name}. ` +
-      reference.facts.join(' ')
-    : '';
   const scopeSentence =
     ' This assessment covers URL structure, DNS resolution, TLS certificate validation and the' +
     ' HTTP response. It does not consult domain reputation, blocklist or threat-intelligence' +
@@ -428,9 +424,17 @@ export async function scanUrl(
     findings,
     security_headers: headers,
     confidence: 1,
-    reason:
-      `${headline}${tlsSentence}${httpSentence}${dnsSentence}${findingSentence}` +
-      `${truncatedSentence}${historySentence}${documentedSentence}${scopeSentence}`,
+    // When the host is one this intent is asked *about* rather than asked to
+    // scan, the documented reporting is the answer and leads. Appending it
+    // after the whole scan narrative left it at the tail, where the
+    // summariser drops it -- the same way trailing fee and confirmation
+    // detail displaced the addresses from ONCHAIN_TX_LOOKUP.
+    reason: reference
+      ? `${reference.facts.join(' ')} A live scan of ${url.toString()} was also run: ` +
+        `${headline.charAt(0).toLowerCase()}${headline.slice(1)}${dnsSentence}` +
+        `${historySentence}`
+      : `${headline}${tlsSentence}${httpSentence}${dnsSentence}${findingSentence}` +
+        `${truncatedSentence}${historySentence}${scopeSentence}`,
     checked_at: now.toISOString(),
   };
 }
