@@ -18,6 +18,8 @@ let selfSignedServer: tls.Server;
 let selfSignedPort = 0;
 let plainServer: net.Server;
 let plainPort = 0;
+let stallingServer: net.Server;
+let stallingPort = 0;
 
 function listen(serverToStart: net.Server | tls.Server): Promise<number> {
   return new Promise((resolve) => {
@@ -213,11 +215,13 @@ beforeAll(async () => {
     (socket) => socket.end(),
   );
   plainServer = net.createServer((socket) => socket.end());
+  stallingServer = net.createServer(() => undefined);
   port = await listen(server);
   wrongPort = await listen(wrongServer);
   ecdsaPort = await listen(ecdsaServer);
   selfSignedPort = await listen(selfSignedServer);
   plainPort = await listen(plainServer);
+  stallingPort = await listen(stallingServer);
 });
 
 afterAll(() => {
@@ -226,6 +230,7 @@ afterAll(() => {
   ecdsaServer.close();
   selfSignedServer.close();
   plainServer.close();
+  stallingServer.close();
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -265,6 +270,20 @@ describe('local TLS engine', () => {
     const result = await verifyTLS(`localhost:${plainPort}`, { allowPrivateTargets: true });
     expect(result.valid).toBe(false);
     expect(['HANDSHAKE_FAILURE', 'TIMEOUT']).toContain(result.failureCode);
+  });
+  it('starts the handshake timeout only after the TCP connection succeeds', async () => {
+    const result = await verifyTLS(`localhost:${stallingPort}`, {
+      allowPrivateTargets: true,
+      requestTimeoutMs: 1_000,
+      connectTimeoutMs: 50,
+      handshakeTimeoutMs: 150,
+    });
+    expect(result.failureCode).toBe('TIMEOUT');
+    expect(result.failureMessage).toBe('TLS handshake timed out');
+    expect(result.reachable).toBe(true);
+    expect(result.network.selectedAddress).toBe('127.0.0.1');
+    expect(result.timingMs.connect).toBeLessThan(50);
+    expect(result.timingMs.handshake).toBeGreaterThanOrEqual(100);
   });
   it('classifies NXDOMAIN without throwing', async () => {
     const result = await verifyTLS('preflight-nxdomain.invalid', { dnsTimeoutMs: 1000 });

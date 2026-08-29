@@ -59,6 +59,12 @@ function isTimeout(error: unknown): boolean {
   return code === 'ETIMEDOUT' || /timed out/i.test(errorMessage(error));
 }
 
+function attemptProgress(result: Partial<TLSVerificationResult>): number {
+  if (result.handshakeSucceeded) return 3;
+  if (result.reachable) return 2;
+  return 1;
+}
+
 function baseResult(
   input: string,
   host: string,
@@ -131,14 +137,18 @@ function verifyAttempt(
   return new Promise((resolve) => {
     const connectStarted = performance.now();
     let settled = false;
-    const connectTimer = setTimeout(
-      () => finish({ failureCode: 'TIMEOUT', failureMessage: 'TCP connection timed out' }, true),
-      options.connectTimeoutMs,
-    );
-    const handshakeTimer = setTimeout(
-      () => finish({ failureCode: 'TIMEOUT', failureMessage: 'TLS handshake timed out' }, true),
-      options.handshakeTimeoutMs,
-    );
+    let connectMs: number | undefined;
+    let handshakeStarted: number | undefined;
+    let connectTimer: ReturnType<typeof setTimeout> | undefined;
+    let handshakeTimer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (result: Partial<TLSVerificationResult>, retryable: boolean): void => {
+      if (settled) return;
+      settled = true;
+      if (connectTimer) clearTimeout(connectTimer);
+      if (handshakeTimer) clearTimeout(handshakeTimer);
+      socket.destroy();
+      resolve({ result, retryable });
+    };
     const socketOptions: tls.ConnectionOptions = {
       host: address,
       port,
@@ -151,16 +161,34 @@ function verifyAttempt(
         tls.checkServerIdentity(hostname || requestedHost, certificate),
     };
     const socket = tls.connect(socketOptions);
-    const finish = (result: Partial<TLSVerificationResult>, retryable: boolean): void => {
-      if (settled) return;
-      settled = true;
-      if (connectTimer) clearTimeout(connectTimer);
-      if (handshakeTimer) clearTimeout(handshakeTimer);
-      socket.destroy();
-      resolve({ result, retryable });
-    };
+    connectTimer = setTimeout(
+      () => finish({ failureCode: 'TIMEOUT', failureMessage: 'TCP connection timed out' }, true),
+      options.connectTimeoutMs,
+    );
     socket.once('connect', () => {
-      const connectMs = elapsed(connectStarted);
+      const connectedInMs = elapsed(connectStarted);
+      connectMs = connectedInMs;
+      if (connectTimer) clearTimeout(connectTimer);
+      connectTimer = undefined;
+      handshakeStarted = performance.now();
+      handshakeTimer = setTimeout(
+        () =>
+          finish(
+            {
+              reachable: true,
+              handshakeSucceeded: false,
+              failureCode: 'TIMEOUT',
+              failureMessage: 'TLS handshake timed out',
+              timingMs: {
+                connect: connectedInMs,
+                handshake: elapsed(handshakeStarted ?? connectStarted),
+                total: elapsed(connectStarted),
+              },
+            },
+            true,
+          ),
+        options.handshakeTimeoutMs,
+      );
       socket.once('secureConnect', () => {
         const certificate = getCertificate(socket);
         const hostnameError = tls.checkServerIdentity(hostname, socket.getPeerCertificate());
@@ -201,8 +229,8 @@ function verifyAttempt(
           failureCode,
           cipher: cipher.standardName || cipher.name,
           timingMs: {
-            connect: connectMs,
-            handshake: elapsed(connectStarted),
+            connect: connectedInMs,
+            handshake: elapsed(handshakeStarted ?? connectStarted),
             total: elapsed(connectStarted),
           },
         };
@@ -220,12 +248,6 @@ function verifyAttempt(
     });
     socket.once('error', (error: Error) => {
       const code = errorCode(error);
-      const retryable =
-        code === 'ECONNREFUSED' ||
-        code === 'ECONNRESET' ||
-        code === 'EHOSTUNREACH' ||
-        code === 'ENETUNREACH' ||
-        isTimeout(error);
       finish(
         {
           reachable: code !== 'ECONNREFUSED' && code !== 'EHOSTUNREACH' && code !== 'ENETUNREACH',
@@ -236,9 +258,17 @@ function verifyAttempt(
               ? 'UNTRUSTED_CHAIN'
               : 'HANDSHAKE_FAILURE',
           failureMessage: error.message,
-          timingMs: { connect: elapsed(connectStarted), total: elapsed(connectStarted) },
+          timingMs: {
+            connect: connectMs ?? elapsed(connectStarted),
+            ...(handshakeStarted === undefined ? {} : { handshake: elapsed(handshakeStarted) }),
+            total: elapsed(connectStarted),
+          },
         },
-        retryable,
+        // A failure before secureConnect says only that this address failed.
+        // Another deterministically ordered A/AAAA address may still serve a
+        // healthy TLS endpoint. Certificate verdicts are returned from
+        // secureConnect above and do not take this retry path.
+        true,
       );
     });
   });
@@ -284,10 +314,14 @@ export async function verifyTLS(
     result.dnsResolved = true;
     result.network.resolvedAddresses = resolution.addresses.map((entry) => entry.address);
     result.timingMs.dns = resolution.elapsedMs;
-    let lastAttempt: Partial<TLSVerificationResult> = { failureCode: 'UNKNOWN' };
+    let bestAttempt:
+      | {
+          result: Partial<TLSVerificationResult>;
+          address: { address: string; family: 4 | 6 };
+        }
+      | undefined;
     for (const address of resolution.addresses) {
       if (remainingMs() <= 0) {
-        lastAttempt = { failureCode: 'TIMEOUT', failureMessage: 'request deadline exceeded' };
         break;
       }
       const attemptOptions: TLSVerificationOptions = {
@@ -301,13 +335,29 @@ export async function verifyTLS(
         address.address,
         attemptOptions,
       );
-      lastAttempt = attempt.result;
-      Object.assign(result, attempt.result);
-      result.network.selectedAddress = address.address;
-      result.network.family = address.family;
-      if (!attempt.retryable || attempt.result.handshakeSucceeded) break;
+      if (
+        bestAttempt === undefined ||
+        attemptProgress(attempt.result) > attemptProgress(bestAttempt.result)
+      ) {
+        bestAttempt = { result: attempt.result, address };
+      }
+      if (attempt.result.handshakeSucceeded || !attempt.retryable) break;
     }
-    if (lastAttempt.failureCode === 'UNKNOWN') result.failureCode = 'UNKNOWN';
+    if (bestAttempt) {
+      const attemptTiming = bestAttempt.result.timingMs;
+      Object.assign(result, bestAttempt.result);
+      result.network.selectedAddress = bestAttempt.address.address;
+      result.network.family = bestAttempt.address.family;
+      result.timingMs = {
+        dns: resolution.elapsedMs,
+        ...(attemptTiming?.connect === undefined ? {} : { connect: attemptTiming.connect }),
+        ...(attemptTiming?.handshake === undefined ? {} : { handshake: attemptTiming.handshake }),
+        total: elapsed(started),
+      };
+    } else {
+      result.failureCode = 'TIMEOUT';
+      result.failureMessage = 'request deadline exceeded';
+    }
   } catch (error) {
     const message = errorMessage(error);
     const code = errorCode(error);

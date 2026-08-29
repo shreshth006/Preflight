@@ -35,9 +35,15 @@ Gateway.
 - `getPeerCertificate(true)` is walked through the server-presented issuer
   links. `chainComplete` means the leaf has a linked issuer in the presented
   chain; it is not inferred from trust or from an arbitrary chain length.
-- A connection/handshake network failure may try the next deterministic
-  address. A completed handshake is authoritative for that attempt, even if
+- A connection/handshake network failure tries the next deterministic address.
+  If every address fails, the result from the attempt that progressed furthest
+  (TLS handshake, then TCP connection, then connection failure) is retained;
+  a later broken family cannot overwrite evidence that another family was
+  reachable. A completed handshake is authoritative for that attempt, even if
   its certificate is invalid.
+- TCP and TLS-handshake timers are separate phases. The TCP timer is cancelled
+  on connect and only then is the handshake timer started, so a slow connect
+  cannot expire under the wrong phase label.
 - TLS 1.2 and TLS 1.3 are allowed; older protocols are not.
 
 ## Reliability boundaries

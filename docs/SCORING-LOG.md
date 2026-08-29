@@ -470,3 +470,30 @@ No post-deployment Telegraph score has yet been observed.
 
 **Conclusion:** Keep the correctness and measurement fixes. Scoring effect is
 pending epoch 291 or later; the latency outlier is visible rather than hidden.
+
+### v0.7 — Independent TCP/TLS deadlines and dual-stack evidence (2026-08-29)
+
+**Change:** The TCP connection timer is now cancelled as soon as the socket
+connects, and the TLS handshake timer starts at that boundary. A pre-certificate
+failure on one deterministic A/AAAA address now advances to the next address.
+If all addresses fail, PREFLIGHT retains the attempt that progressed furthest
+instead of allowing a later connection refusal to overwrite an earlier
+reachable-handshake result.
+
+**Hypothesis:** One broken IP family must not hide a healthy family or produce
+random failure classifications. Separate phase timers and deterministic
+best-attempt selection should reduce false `unreachable` results while keeping
+equivalent network observations reproducible.
+
+**Before:** Both timers started before TCP connect and the connection timer
+remained armed during TLS. In a local dual-stack replay, IPv4 connected and
+stalled during TLS, then IPv6 refused the connection; the final result reported
+the later IPv6 refusal and discarded evidence that IPv4 was reachable.
+
+**After:** A local stalling-server regression reports `TLS handshake timed out`,
+`reachable: true`, and the selected IPv4 address after the IPv6 refusal. The
+full suite passes 60 tests. No post-deployment Telegraph score has yet been
+observed.
+
+**Conclusion:** Keep; this is a protocol-phase correctness fix. Scoring effect
+is pending epoch 291 or later.
