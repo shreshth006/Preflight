@@ -28,7 +28,7 @@ CASES=(
   "tx-lookup|hash=${TX}&chain=base-sepolia|success"
   "tvl|protocol=aave|protocol"
   "crypto-price|asset=BTC|found"
-  "fx-rate|pair=USD to EUR|found"
+  "fx-rate|pair=USD%20to%20EUR|found"
   "ip-geolocation|ip=8.8.8.8|found"
   "ip-geolocation|ip=192.168.1.1|not_found"
   "stock-price|symbol=AAPL|found"
