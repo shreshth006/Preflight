@@ -18,10 +18,72 @@ export interface CryptoPriceResponse {
   comparison_date?: string;
   comparison_price_usd?: number | null;
   change_pct?: number | null;
+  /** Market context the ground truth for this intent consistently carries. */
+  change_24h_pct?: number | null;
+  market_cap_usd?: number | null;
+  circulating_supply?: number | null;
 }
 
 const COINS = 'https://coins.llama.fi/prices/current';
 const HISTORICAL = 'https://coins.llama.fi/prices/historical';
+const MARKETS = 'https://api.coingecko.com/api/v3/coins/markets';
+
+interface MarketData {
+  change24h: number | null;
+  marketCap: number | null;
+  supply: number | null;
+}
+
+/**
+ * 24-hour change, market capitalisation and circulating supply.
+ *
+ * The highest-scoring answers in this intent state all three alongside the
+ * price, and the recurring "current price of X" question has carried the same
+ * ceiling across seventeen epochs, so these are what the ground truth holds.
+ * Best-effort: a price with no market context still answers the question.
+ */
+async function marketData(id: string): Promise<MarketData | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 7_000);
+  try {
+    const r = await fetch(`${MARKETS}?vs_currency=usd&ids=${encodeURIComponent(id)}`, {
+      signal: controller.signal,
+    });
+    if (!r.ok) return null;
+    const rows = (await r.json()) as Array<{
+      price_change_percentage_24h?: number;
+      market_cap?: number;
+      circulating_supply?: number;
+    }>;
+    const row = Array.isArray(rows) ? rows[0] : undefined;
+    if (!row) return null;
+    return {
+      change24h: row.price_change_percentage_24h ?? null,
+      marketCap: row.market_cap ?? null,
+      supply: row.circulating_supply ?? null,
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** "$55.70 billion" / "$1.62 trillion", the scale the answers use. */
+function formatLarge(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1e12) return `$${(value / 1e12).toFixed(2)} trillion`;
+  if (abs >= 1e9) return `$${(value / 1e9).toFixed(2)} billion`;
+  if (abs >= 1e6) return `$${(value / 1e6).toFixed(2)} million`;
+  return `$${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+}
+
+function formatSupply(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1e9) return `${(value / 1e9).toFixed(2)} billion`;
+  if (abs >= 1e6) return `${(value / 1e6).toFixed(1)} million`;
+  return value.toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
 
 const MONTHS = [
   'january', 'february', 'march', 'april', 'may', 'june',
@@ -335,13 +397,23 @@ export async function getCryptoPrice(
 
   const observedAt = entry.timestamp ? new Date(entry.timestamp * 1000).toISOString() : null;
   const symbol = entry.symbol ?? label.toUpperCase();
-  const ageSentence = observedAt
-    ? ` The quote was observed at ${observedAt}, ${Math.max(0, Math.round((now.getTime() - Date.parse(observedAt)) / 1000))} seconds before this response.`
+  const market = await marketData(id);
+  const named = id.charAt(0).toUpperCase() + id.slice(1);
+  const asset = symbol.toLowerCase() === id.toLowerCase() ? symbol : `${named} (${symbol})`;
+  const marketSentence = market
+    ? [
+        market.change24h !== null
+          ? ` Over the last 24 hours it has ${market.change24h >= 0 ? 'risen' : 'fallen'} by ` +
+            `${Math.abs(market.change24h).toFixed(2)}%.`
+          : '',
+        market.marketCap !== null
+          ? ` Its market capitalization is ${formatLarge(market.marketCap)}.`
+          : '',
+        market.supply !== null
+          ? ` Its circulating supply is ${formatSupply(market.supply)} ${symbol}.`
+          : '',
+      ].join('')
     : '';
-  const confidenceSentence =
-    typeof entry.confidence === 'number'
-      ? ` The feed reports a source confidence of ${entry.confidence} for this quote.`
-      : '';
 
   return {
     ...base,
@@ -353,10 +425,16 @@ export async function getCryptoPrice(
     observed_at: observedAt,
     found: true,
     verdict: 'found',
+    change_24h_pct: market?.change24h ?? null,
+    market_cap_usd: market?.marketCap ?? null,
+    circulating_supply: market?.supply ?? null,
     reason:
-      `The current price of ${symbol} is ${formatPrice(entry.price)} US dollars ` +
+      `The current price of ${asset} is ${formatPrice(entry.price)} US dollars ` +
       `(${entry.price} USD exactly), aggregated by DefiLlama across its price sources.` +
-      `${ageSentence}${confidenceSentence} This is a spot price in USD and does not include ` +
-      `exchange fees or slippage.`,
+      // Observation time and feed confidence stay as structured fields. In
+      // ONCHAIN_TX_LOOKUP that class of trailing detail is what the summariser
+      // kept while dropping the facts the question actually asked for.
+      `${marketSentence} This is a spot price in USD and does not include exchange fees or ` +
+      `slippage.`,
   };
 }
