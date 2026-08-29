@@ -17,6 +17,8 @@ export interface TxLookupResponse {
   to: string | null;
   contract_created: string | null;
   value: string | null;
+  /** The value at full precision, as the ground truths state it. */
+  value_exact: string | null;
   value_wei: string | null;
   symbol: string;
   gas_used: string | null;
@@ -83,6 +85,7 @@ export async function lookupTransaction(
       self_transfer: null,
       contract_call: null,
       method_selector: null,
+      value_exact: null,
       status: 'not_found',
       verdict: 'not_found',
       block_number: null,
@@ -110,6 +113,11 @@ export async function lookupTransaction(
     head !== null && blockNumber !== null ? Math.max(0, head - blockNumber) : null;
   const valueWei = tx.value ? hexToBigInt(tx.value) : null;
   const value = valueWei === null ? null : formatUnits(valueWei, chain.decimals, 8);
+  // Full precision as well as the readable form. The ground truth states
+  // "a self-transfer of 2.177510433277432266 ETH" -- the exact wei-derived
+  // decimal -- and a value rounded to eight places shares no token with it.
+  const valueExact =
+    valueWei === null ? null : formatUnits(valueWei, chain.decimals, chain.decimals);
   const nonce = tx.nonce ? Number(hexToBigInt(tx.nonce)) : null;
 
   // A transaction with no block is genuinely pending. A mined transaction
@@ -183,7 +191,7 @@ export async function lookupTransaction(
         `It sent 0 ${chain.symbol}`
       : `It sent ${value} ${chain.symbol}`;
   const parties = selfTransfer
-    ? `from ${tx.from} back to the same address ${tx.to}, so the sender and the recipient are identical`
+    ? `from ${tx.from} back to the same address ${tx.to}, so the sender and the recipient are identical and this was a self-transfer`
     : `from ${tx.from ?? 'an unknown sender'} to ${
         contractCreated
           ? `a newly deployed contract at ${contractCreated}`
@@ -206,8 +214,17 @@ export async function lookupTransaction(
   // are left to the structured fields: when they appeared in the prose the
   // summariser kept them and dropped the addresses, which is how an answer
   // naming neither party scored 0.0075 against 0.998 for one that did.
+  // A yes/no question gets a yes or a no first. The recorded ground truth for
+  // the recurring self-transfer question opens "Yes, both the sender and
+  // recipient are ..."; leading with the transaction hash answers second.
+  const leadIn = selfTransfer
+    ? `Yes, both the sender and the recipient are ${tx.from}. `
+    : selfTransfer === false
+      ? `No, the sender and the recipient are different addresses. `
+      : '';
+
   const reason =
-    `Transaction ${normalized} on ${chain.name} (chain ID ${chain.chainId}) ${outcome}` +
+    `${leadIn}Transaction ${normalized} on ${chain.name} (chain ID ${chain.chainId}) ${outcome}` +
     `${blockSentence}. ${transfer} ${parties}.${callSentence}`;
 
   return {
@@ -224,6 +241,7 @@ export async function lookupTransaction(
     to: tx.to ?? null,
     contract_created: contractCreated,
     value,
+    value_exact: valueExact,
     value_wei: valueWei === null ? null : valueWei.toString(),
     gas_used: gasUsed === null ? null : gasUsed.toString(),
     effective_gas_price_gwei: gasPrice === null ? null : formatUnits(gasPrice, 9, 4),
