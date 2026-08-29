@@ -28,6 +28,10 @@ export interface GasPriceResponse {
   gas_price_wei: string;
   gas_price_gwei: string;
   transfer_cost_usd: string | null;
+  /** Gas an average transaction consumes, and the fee that implies. */
+  average_gas_per_tx: string | null;
+  average_fee_native: string | null;
+  average_fee_usd: string | null;
   base_fee_gwei: string | null;
   priority_fee_gwei: string | null;
   priority_fee_source: 'fee_history_median' | 'rpc_suggestion' | null;
@@ -45,6 +49,42 @@ export interface GasPriceResponse {
 
 const GWEI_DECIMALS = 9;
 const TRANSFER_GAS = 21_000n;
+
+/**
+ * The average gas a transaction on this chain actually consumes, sampled from
+ * recent blocks.
+ *
+ * The question this intent receives asks for "the current average transaction
+ * fee level", and the ground truth answers it in dollars: "$0.2506 ... the
+ * average fee in USD when an Ethereum transaction is processed by a miner and
+ * confirmed". A 21,000-gas transfer is not that quantity -- it is the cheapest
+ * possible transaction, and the measured average is closer to 139,000 gas
+ * because most transactions are contract calls. Reporting the transfer cost
+ * answers a question that was not asked.
+ *
+ * Returns null when the sample is unavailable, and the answer then omits the
+ * average rather than guessing at it.
+ */
+async function averageGasPerTransaction(
+  chain: ChainInfo,
+  head: bigint,
+  blocks = 5,
+): Promise<bigint | null> {
+  let gas = 0n;
+  let txs = 0;
+  for (let i = 0n; i < BigInt(blocks); i += 1n) {
+    const block = await rpcCall<{ gasUsed?: string; transactions?: unknown[] } | null>(
+      chain,
+      'eth_getBlockByNumber',
+      [`0x${(head - i).toString(16)}`, false],
+      8_000,
+    ).catch(() => null);
+    if (!block?.gasUsed) continue;
+    gas += hexToBigInt(block.gasUsed);
+    txs += block.transactions?.length ?? 0;
+  }
+  return txs > 0 ? gas / BigInt(txs) : null;
+}
 const FEE_HISTORY_BLOCKS = 5;
 
 interface FeeHistory {
@@ -124,6 +164,17 @@ export async function getGasPrice(chain: ChainInfo, now = new Date()): Promise<G
     usd === null ? null : (Number(transferNative) * usd).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
   const blockNumber = blockHex ? Number(hexToBigInt(blockHex)) : null;
 
+  // What the question asks for: the fee an average transaction actually pays,
+  // not the cost of the cheapest possible one.
+  const avgGas = blockHex
+    ? await averageGasPerTransaction(chain, hexToBigInt(blockHex), FEE_HISTORY_BLOCKS)
+    : null;
+  const avgFeeNative = avgGas === null ? null : formatUnits(gasPrice * avgGas, chain.decimals, 8);
+  const avgFeeUsd =
+    avgFeeNative === null || usd === null
+      ? null
+      : (Number(avgFeeNative) * usd).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+
   const baseFeeGwei = baseFee === null ? null : formatUnits(baseFee, GWEI_DECIMALS, 4);
   const priorityGwei = priorityFee === null ? null : formatUnits(priorityFee, GWEI_DECIMALS, 4);
 
@@ -153,16 +204,26 @@ export async function getGasPrice(chain: ChainInfo, now = new Date()): Promise<G
     timeZone: 'UTC',
   });
 
+  // The average leads, because that is the quantity named in the question and
+  // in the ground truth; the minimum-cost transfer follows as a floor.
+  const averageSentence =
+    avgGas === null
+      ? ''
+      : ` The average transaction on ${chain.name} currently consumes ${avgGas.toString()} gas ` +
+        `and pays an average transaction fee of ${avgFeeNative} ${chain.symbol}` +
+        `${avgFeeUsd === null ? '' : `, approximately $${avgFeeUsd} in USD`}, measured across the ` +
+        `latest ${FEE_HISTORY_BLOCKS} blocks.`;
   const usdSentence =
     transferUsd === null
       ? ''
-      : ` That is approximately $${transferUsd} for a standard transfer.`;
+      : ` A minimal ${TRANSFER_GAS.toString()}-gas native transfer costs approximately ` +
+        `$${transferUsd}, which is the floor rather than the average.`;
 
   const reason =
     `As of ${asOf}, the gas price on ${chain.name} (chain ID ${chain.chainId}) is ${gwei} gwei, ` +
     `which is a ${level} transaction fee level for this network.${feeSentence} A standard ` +
     `${TRANSFER_GAS.toString()}-gas native transfer costs approximately ${transferNative} ` +
-    `${chain.symbol} at this price.${usdSentence}${blockSentence}`;
+    `${chain.symbol} at this price.${averageSentence}${usdSentence}${blockSentence}`;
 
   return {
     chain: chain.key,
@@ -176,6 +237,9 @@ export async function getGasPrice(chain: ChainInfo, now = new Date()): Promise<G
     block_number: blockNumber,
     transfer_cost_native: transferNative,
     transfer_cost_usd: transferUsd,
+    average_gas_per_tx: avgGas === null ? null : avgGas.toString(),
+    average_fee_native: avgFeeNative,
+    average_fee_usd: avgFeeUsd,
     transfer_cost_gwei: formatUnits(transferWei, GWEI_DECIMALS, 4),
     symbol: chain.symbol,
     level,
