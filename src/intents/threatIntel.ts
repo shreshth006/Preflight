@@ -122,9 +122,9 @@ const REFERENCES: ThreatReference[] = [
     name: 'Conficker domain generation algorithm',
     disposition: 'malicious',
     facts: [
-      'Conficker, also known as Downadup, located its command-and-control servers with a domain generation algorithm rather than fixed addresses, which made it resistant to simple domain blocking.',
-      'Earlier variants generated 250 candidate domains per day; the Conficker.C variant expanded this to 50,000 domains per day across more than 100 top-level domains, of which the malware queried a subset.',
-      'The Conficker Working Group, an industry and registry coalition, pre-registered and blocked the generated domains to deny the operators a rendezvous point.',
+      'The Conficker worm, active in 2008 and 2009, used a domain generation algorithm seeded by the current date to locate its command-and-control servers rather than fixed addresses.',
+      'The A and B variants generated 250 pseudo-random domains per day across 110 top-level domains, while the Conficker.C variant, active from April 1, 2009, escalated this to 50,000 candidate domains generated daily across 116 top-level domains, of which it would contact 500.',
+      'That scale was explicitly designed to defeat the Conficker Working Group\'s domain-blocking countermeasures, which pre-registered and sinkholed the generated domains.',
     ],
   },
   {
@@ -144,9 +144,9 @@ const REFERENCES: ThreatReference[] = [
     name: 'Mirai botnet source code release',
     disposition: 'malicious',
     facts: [
-      'The Mirai source code was published on the Hackforums site in September 2016 by a user posting as Anna-senpai, later identified as Paras Jha.',
-      'Mirai spread by scanning for IoT devices, primarily cameras and routers, and logging in with a built-in list of default credentials.',
-      'Botnets built from the released code carried out the DDoS attacks on Krebs on Security in September 2016 and on the DNS provider Dyn in October 2016; Jha and two co-defendants pleaded guilty in December 2017.',
+      'Mirai, the IoT botnet malware behind the record-breaking September 2016 DDoS attacks on Brian Krebs\' site and the host OVH, had its source code leaked publicly on Hack Forums by a user calling themselves Anna-senpai on September 30, 2016.',
+      'Academic follow-up research, presented at USENIX Security 2017 by Antonakakis and others, traced numerous command-and-control domains associated with post-leak Mirai variant clusters.',
+      'That work found some of those domains had DNS lookup activity predating their actual use as command-and-control infrastructure by months, and the released code went on to seed many independent variants.',
     ],
   },
 ];
