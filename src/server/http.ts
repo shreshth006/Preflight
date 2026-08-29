@@ -24,6 +24,7 @@ import type { TLSVerificationOptions } from '../tls/types.js';
 import { chainFromText, lookupChain, resolveChain, SUPPORTED_CHAINS } from '../chain/rpc.js';
 import { resolveEnsName } from '../chain/ens.js';
 import { getGasPrice } from '../intents/gasPrice.js';
+import { unanswerable } from '../telegraph/unanswerable.js';
 import { describeMalformedAddress, getWalletBalance } from '../intents/walletBalance.js';
 import { lookupTransaction } from '../intents/onchainTx.js';
 import { describeDocumentedIncident, scanUrl } from '../intents/urlScan.js';
@@ -93,8 +94,10 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
       // no account exists at it, so its balance is zero.
       const malformed = findMalformedAddress(values);
       if (malformed) return describeMalformedAddress(malformed, chain);
-      throw new TypeError(
-        'missing required field: address (an 0x-prefixed EVM address or an ENS name)',
+      return unanswerable(
+        `A native-coin balance on ${chain.name}`,
+        'a wallet address',
+        'A balance lookup needs a 0x-prefixed EVM address or an ENS name.',
       );
     },
   },
@@ -103,7 +106,11 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
     handle: async (values) => {
       const hash = findTxHash(values);
       if (!hash)
-        throw new TypeError('missing required field: hash (a 0x-prefixed transaction hash)');
+        return unanswerable(
+          'A transaction lookup',
+          'a transaction hash',
+          'A lookup needs a 0x-prefixed 32-byte transaction hash.',
+        );
       return lookupTransaction(hash, chainFor(values));
     },
   },
@@ -115,7 +122,11 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
       if (!target) {
         const documented = describeDocumentedIncident(questionText);
         if (documented) return documented;
-        throw new TypeError('missing required field: url');
+        return unanswerable(
+          'A URL safety assessment',
+          'a URL or a documented incident',
+          'A scan needs a URL to retrieve, or the name of a documented domain incident to report on.',
+        );
       }
       return scanUrl(target, tlsOptionsFrom(config), new Date(), questionText);
     },
@@ -124,7 +135,13 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
     intent: 'CRYPTO_PRICE',
     handle: async (values) => {
       const subject = findSubject(values) ?? values.all()[0];
-      if (!subject) throw new TypeError('missing required field: asset');
+      if (!subject) {
+        return unanswerable(
+          'A cryptocurrency price',
+          'an asset',
+          'A quote needs a ticker such as BTC or a name such as Bitcoin.',
+        );
+      }
       return getCryptoPrice(subject, new Date(), values.all().join(' '));
     },
   },
@@ -134,7 +151,13 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
       // The pair may be named as codes, as words, or inside a whole question,
       // so the full request text is what gets scanned.
       const text = values.all().join(' ');
-      if (!text) throw new TypeError('missing required field: pair');
+      if (!text) {
+        return unanswerable(
+          'An exchange rate',
+          'a currency pair',
+          'A rate needs two currencies, as ISO 4217 codes such as USD and EUR or as their names.',
+        );
+      }
       return getExchangeRate(text);
     },
   },
@@ -142,7 +165,13 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
     intent: 'IP_GEOLOCATION',
     handle: async (values) => {
       const text = values.all().join(' ');
-      if (!text) throw new TypeError('missing required field: ip');
+      if (!text) {
+        return unanswerable(
+          'A geolocation',
+          'an IP address',
+          'Geolocation needs an IPv4 or IPv6 address; a hostname must be resolved to one first.',
+        );
+      }
       return locateIp(text);
     },
   },
@@ -150,7 +179,13 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
     intent: 'STOCK_PRICE',
     handle: async (values) => {
       const subject = findSubject(values) ?? values.all()[0];
-      if (!subject) throw new TypeError('missing required field: symbol');
+      if (!subject) {
+        return unanswerable(
+          'An equity quote',
+          'a ticker symbol',
+          'A quote needs a listed symbol such as AAPL, or a company name that maps to one.',
+        );
+      }
       return getStockPrice(values.all().join(' '));
     },
   },
@@ -158,7 +193,13 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
     intent: 'TVL_LOOKUP',
     handle: async (values) => {
       const subject = findTvlSubject(values);
-      if (!subject) throw new TypeError('missing required field: protocol');
+      if (!subject) {
+        return unanswerable(
+          'A total value locked figure',
+          'a protocol or chain',
+          'A TVL lookup needs the name of a DeFi protocol such as Aave V3, or of a chain.',
+        );
+      }
       // "Aave V3 on the Ethereum chain" asks for that chain's share, not the
       // protocol total across every deployment.
       const named = findChain(values) ?? chainFromText(values.text())?.key;

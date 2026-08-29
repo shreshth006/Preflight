@@ -94,3 +94,19 @@ describe('HTTP miner', () => {
     expect(response.body.hostname).toBeNull();
   });
 });
+
+describe('a question missing its parameter is answered, not refused', () => {
+  it('answers a balance question that names no address', async () => {
+    // Epoch 292 asked "What is the current native coin balance of wallet
+    // address on the Base chain?" -- no address in it. We returned HTTP 400
+    // and scored zero; the miner that simply answered took the intent.
+    const q = encodeURIComponent(
+      'What is the current native coin balance of wallet address on the Base chain?',
+    );
+    const { status, body } = await get(`/wallet-balance?chain=base&question=${q}`);
+    expect(status).toBe(200);
+    expect(body.verdict).toBe('not_found');
+    expect(String(body.reason)).toMatch(/wallet address/i);
+    expect(String(body.reason).length).toBeGreaterThan(80);
+  });
+});
