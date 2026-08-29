@@ -42,20 +42,57 @@ for case in "${CASES[@]}"; do
   [[ -n "$query" ]] && url="$url?$query"
   body="$(mktemp)"
   read -r code time < <(curl -s -m 45 -o "$body" -w '%{http_code} %{time_total}' "$url")
-  read -r verdict len < <(
+  read -r verdict len prose < <(
     python3 -c '
-import json, sys
+import json, re, sys
+
+# Well-formedness of the answer prose, not just of the response.
+#
+# A half-applied edit once shipped "... across its price sources., a 24-hour
+# price increase ..." -- a comma after a full stop, and a missing one before
+# the following clause -- and every check here passed it, because the gate
+# looked at status codes and verdicts and never at the sentence. The prose is
+# the thing the network actually scores, so it is checked too.
+def defects(text):
+    found = []
+    # A template that did not render, or a value that reached the prose as a
+    # JavaScript primitive rather than as a fact.
+    for token in ("${", "undefined", "NaN", "[object Object]", "null,", " null ", "Infinity"):
+        if token in text:
+            found.append("template:" + token.strip())
+    if re.search(r"\.\s*,", text):
+        found.append("comma-after-period")
+    if re.search(r",\s*\.", text):
+        found.append("period-after-comma")
+    if ",," in text or re.search(r"(?<!\.)\.\.(?!\.)", text):
+        found.append("doubled-punctuation")
+    if re.search(r"\s[.,;]", text):
+        found.append("space-before-punctuation")
+    if "  " in text:
+        found.append("double-space")
+    if not text.rstrip().endswith((".", "!", "?")):
+        found.append("unterminated")
+    if text[:1].islower():
+        found.append("lowercase-start")
+    return found
+
 try:
     d = json.load(open(sys.argv[1]))
 except Exception:
-    print("PARSE_FAIL 0"); raise SystemExit
-print(d.get("verdict") or d.get("status") or "-", len(d.get("reason", "")))
+    print("PARSE_FAIL 0 -"); raise SystemExit
+
+reason = d.get("reason") or ""
+verdict = d.get("verdict") or d.get("status") or "-"
+# health and ready carry no prose and are not required to.
+issues = defects(reason) if reason else []
+print(verdict, len(reason), ",".join(issues) or "-")
 ' "$body"
   )
   rm -f "$body"
   bad=""
   [[ "$code" != 200 ]] && bad="  <-- HTTP $code"
   [[ -n "$expected" && "$verdict" != "$expected" ]] && bad="  <-- expected $expected"
+  [[ "$prose" != "-" ]] && bad="$bad  <-- prose: $prose"
   [[ -n "$bad" ]] && failures=$((failures + 1))
   printf '%-14s %-46s %-9s %-18s %6s %8s%s\n' \
     "$path" "${query:0:46}" "$code" "$verdict" "$len" "$time" "$bad"
