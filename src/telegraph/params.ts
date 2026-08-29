@@ -116,6 +116,9 @@ export function findChain(values: RequestValues): string | undefined {
 
 export function findSubject(values: RequestValues): string | undefined {
   return values.get([
+    'asset',
+    'coin',
+    'ticker',
     'protocol',
     'project',
     'name',

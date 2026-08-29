@@ -162,15 +162,25 @@ export function assetIdFrom(query: string): { id: string; label: string } {
   const cleaned = query
     .trim()
     .toLowerCase()
-    .replace(/[?!.,]/g, '');
+    .replace(/[?!.,]/g, '')
+    // Tickers arrive parenthesised in prose -- "Ethereum (ETH)" -- and the
+    // brackets stopped the word ever matching an alias.
+    .replace(/[()[\]"'`]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   const direct = ALIASES[cleaned];
   if (direct) return { id: direct, label: cleaned.toUpperCase() };
   if (!/\s/.test(cleaned)) return { id: cleaned.replace(/\s+/g, '-'), label: cleaned };
 
+  // A canonical id spelled out in the question ("Ethereum") is as good an
+  // identifier as its ticker, and was previously missed because only the alias
+  // keys were consulted, never their values.
+  const canonical = new Set(Object.values(ALIASES));
   for (const word of cleaned.split(/\s+/)) {
     if (STOPWORDS.has(word)) continue;
     const mapped = ALIASES[word];
     if (mapped) return { id: mapped, label: word.toUpperCase() };
+    if (canonical.has(word)) return { id: word, label: word.toUpperCase() };
   }
   const words = cleaned.split(/\s+/).filter((w) => !STOPWORDS.has(w));
   return { id: words.join('-'), label: words.join(' ') || cleaned };
