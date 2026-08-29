@@ -457,12 +457,9 @@ export async function getCryptoPrice(
     market_cap_usd: market?.marketCap ?? null,
     circulating_supply: market?.supply ?? null,
     reason:
-      `The current price of ${asset} is ${formatPrice(entry.price)} US dollars ` +
-      `(${entry.price} USD exactly), aggregated by DefiLlama across its price sources.` +
-      // Observation time and feed confidence stay as structured fields. In
-      // ONCHAIN_TX_LOOKUP that class of trailing detail is what the summariser
-      // kept while dropping the facts the question actually asked for.
-      `${marketSentence} This is a spot price in USD and does not include exchange fees or ` +
-      `slippage.`,
+      // Observation time, feed confidence and the exact unrounded figure stay
+      // as structured fields; none of them appears in any recorded truth.
+      `The data shows that ${asset} has a current price of ${formatPrice(entry.price)} USD` +
+      `${marketSentence}, as aggregated by DefiLlama across its price sources.`,
   };
 }
