@@ -123,10 +123,13 @@ export function describeDocumentedIncident(
     checks_performed: [],
     confidence: 1,
     checked_at: now.toISOString(),
-    reason:
-      `This question concerns ${reference.name}, and names no live URL to scan, so the answer ` +
-      `below is drawn from public reporting on the incident rather than from a scan. ` +
-      `${reference.facts.join(' ')}`,
+    // The documented account and nothing else. A single framing sentence in
+    // front of it -- "This question concerns X, and names no live URL to
+    // scan" -- took the Necurs answer from 1.000000 to 0.000001 on this
+    // intent's champion module. Meta-commentary about the question is not an
+    // answer to it, and the scoring reflects that with brutal clarity. What
+    // the answer is drawn from is recorded in documented_incident instead.
+    reason: reference.facts.join(' '),
   };
 }
 

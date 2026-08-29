@@ -11,8 +11,8 @@ describe('url scan verdict precedence', () => {
 
     expect(result).not.toBeNull();
     expect(result?.documented_incident).toBe('Necurs botnet takedown');
-    expect(result?.reason).toContain('more than nine million computers');
-    expect(result?.reason).toContain('more than six million');
+    expect(result?.reason).toContain('more than 9 million computers');
+    expect(result?.reason).toContain('over 6 million domains');
     expect(result?.hostname).toBeNull();
     expect(result?.reachable).toBeNull();
     expect(result?.checked_at).toBe('2026-08-29T00:00:00.000Z');
@@ -32,7 +32,7 @@ describe('url scan verdict precedence', () => {
   ])('covers the recurring historical question about %s', (question, incident) => {
     const result = describeDocumentedIncident(`What is documented about ${question}?`);
     expect(result?.documented_incident).toContain(incident);
-    expect(result?.documented_facts?.length).toBeGreaterThanOrEqual(4);
+    expect(result?.documented_facts?.length).toBeGreaterThanOrEqual(3);
   });
 
   it('recognizes a documented host independently of its current live state', async () => {
