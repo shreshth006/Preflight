@@ -17,6 +17,7 @@ import {
   type RequestValues,
 } from '../telegraph/params.js';
 import { toTelegraphResponse } from '../telegraph/response.js';
+import { parentDomainEvidence } from '../tls/parentDomain.js';
 import { verifyTLS } from '../tls/verify.js';
 import type { TLSVerificationOptions } from '../tls/types.js';
 import { chainFromText, lookupChain, resolveChain, SUPPORTED_CHAINS } from '../chain/rpc.js';
@@ -274,15 +275,26 @@ export function createRequestHandler(config: AppConfig): RequestHandler {
         method === 'GET'
           ? extractDomainFromQuery(url.searchParams)
           : extractDomain(await readBody(request));
-      const tlsResult = await verifyTLS(requestInput.domain, {
+      const tlsOptions = {
         maxInputLength: config.maxInputLength,
         requestTimeoutMs: config.requestTimeoutMs,
         dnsTimeoutMs: config.dnsTimeoutMs,
         connectTimeoutMs: config.connectTimeoutMs,
         handshakeTimeoutMs: config.handshakeTimeoutMs,
         allowPrivateTargets: config.allowPrivateTargets,
-      });
-      const telegraphResponse = toTelegraphResponse(tlsResult);
+      };
+      const tlsResult = await verifyTLS(requestInput.domain, tlsOptions);
+      // An unreachable subdomain still has an observable certificate
+      // configuration at its registrable domain, and that is a fact about the
+      // hostname that was asked about rather than a substitute for one.
+      const parentEvidence =
+        tlsResult.reachable && tlsResult.handshakeSucceeded
+          ? null
+          : await parentDomainEvidence(
+              tlsResult.normalizedHost || requestInput.domain,
+              tlsOptions,
+            ).catch(() => null);
+      const telegraphResponse = toTelegraphResponse(tlsResult, new Date(), parentEvidence);
       log('ssl_verification', {
         requestId: id,
         intent: 'SSL_VERIFICATION',

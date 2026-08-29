@@ -1,5 +1,7 @@
 import type { TLSVerificationResult } from '../tls/types.js';
 
+import type { ParentDomainEvidence } from '../tls/parentDomain.js';
+
 export interface LiveCertResponse {
   chain_complete: boolean | null;
   chain_length?: number | null;
@@ -24,6 +26,8 @@ export interface LiveCertResponse {
   checks_completed?: string[];
   checks_blocked?: string[];
   recommendation?: string;
+  /** Certificate configuration observable at the registrable domain. */
+  parent_domain_evidence?: ParentDomainEvidence;
   verdict:
     | 'valid'
     | 'expired'
@@ -139,9 +143,55 @@ function reasonFor(
   return `The TLS/SSL certificate for ${domain} is valid and trusted${issuer}, ${expiry}. ${chain} Hostname validation passes${names}.${protocol}${cipher}${keyBits}. This verdict covers chain trust, hostname match and validity period; revocation status via OCSP or CRL was not checked.`;
 }
 
+/**
+ * What the registrable domain's certificate says about the requested host.
+ *
+ * Phrased so it can never be read as a claim that the unreachable host
+ * presents this certificate. It reports what the parent serves, and what its
+ * SAN list implies for coverage of the host that was asked about.
+ */
+function parentSentence(
+  result: TLSVerificationResult,
+  parent: ParentDomainEvidence | null | undefined,
+): string {
+  if (!parent) return '';
+  const host = result.normalizedHost || result.input;
+  const issued = parent.issuer ? `, issued by ${parent.issuer}` : '';
+  const window =
+    parent.valid_from && parent.valid_to
+      ? `, valid from ${dateOnly(parent.valid_from)} to ${dateOnly(parent.valid_to)}`
+      : parent.valid_to
+        ? `, valid until ${dateOnly(parent.valid_to)}`
+        : '';
+  const sans = parent.subject_alt_names?.length
+    ? ` Its Subject Alternative Names are ${parent.subject_alt_names.join(', ')}.`
+    : '';
+  const coverage = parent.covers_requested_host
+    ? ` The name ${parent.covering_san} on that certificate covers ${host}, so the hostname is` +
+      ` already within the issued certificate's scope and would validate against it if ${host}` +
+      ` were served over TLS.`
+    : ` No name on that certificate covers ${host}, so serving ${host} over TLS would require a` +
+      ` certificate that names it.`;
+  const trust = parent.chain_trusted
+    ? ` That certificate chains to a trusted root.`
+    : parent.chain_trusted === false
+      ? ` That certificate does not chain to a trusted root.`
+      : '';
+  return (
+    ` The certificate configuration is not entirely unobservable, however: the registrable domain` +
+    ` ${parent.domain} does serve TLS and presents a certificate${issued}${window}.${sans}` +
+    `${coverage}${trust}`
+  );
+}
+
 export function toTelegraphResponse(
   result: TLSVerificationResult,
   now = new Date(),
+  /**
+   * Certificate configuration observed at the registrable domain, when the
+   * requested host itself could not be reached.
+   */
+  parent?: ParentDomainEvidence | null,
 ): LiveCertResponse {
   const verdict = verdictFor(result);
   const days = daysRemaining(result.certificate?.validTo, now);
@@ -152,7 +202,7 @@ export function toTelegraphResponse(
     days_remaining: days,
     domain: result.normalizedHost || result.input,
     issuer: result.certificate?.issuer ?? null,
-    reason: reasonFor(result, verdict, days),
+    reason: reasonFor(result, verdict, days) + parentSentence(result, parent),
     valid: result.valid,
     valid_to: dateOnly(result.certificate?.validTo),
     verdict,
@@ -194,6 +244,7 @@ export function toTelegraphResponse(
       'validity period',
       'signature algorithm and key strength',
     ];
+    if (parent) response.parent_domain_evidence = parent;
     response.recommendation =
       stage === 'dns'
         ? `Confirm that ${response.domain} resolves in public DNS, then re-run the certificate chain and hostname checks once it does.`
