@@ -52,9 +52,20 @@ export function parentDomainOf(host: string): string | null {
   return parent.split('.').length >= 2 ? parent : null;
 }
 
-/** Does `san` cover `host`, following RFC 6125 single-label wildcards? */
+/**
+ * Does `san` cover `host`, following RFC 6125 single-label wildcards?
+ *
+ * Accepts the `DNS:` type prefix, because that is the form the certificate
+ * actually carries: measured in production, `DNS:*.example.com` was failing to
+ * match `api.example.com` and the answer reported that no name covered the
+ * host while listing the name that did.
+ */
 export function sanCovers(san: string, host: string): boolean {
-  const s = san.toLowerCase().replace(/\.$/, '');
+  const s = san
+    .toLowerCase()
+    .replace(/^dns:\s*/, '')
+    .trim()
+    .replace(/\.$/, '');
   const h = host.toLowerCase().replace(/\.$/, '');
   if (s === h) return true;
   if (!s.startsWith('*.')) return false;

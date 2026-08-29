@@ -33,6 +33,14 @@ describe('sanCovers', () => {
     expect(sanCovers('*.example.com', 'exampleXcom')).toBe(false);
   });
 
+  it('accepts the DNS: type prefix the certificate actually carries', () => {
+    // Production returned "no name covers api.example.com" while listing
+    // DNS:*.example.com, because the prefix was being matched literally.
+    expect(sanCovers('DNS:*.example.com', 'api.example.com')).toBe(true);
+    expect(sanCovers('DNS:example.com', 'example.com')).toBe(true);
+    expect(sanCovers('DNS: *.example.com', 'api.example.com')).toBe(true);
+  });
+
   it('is case and trailing-dot insensitive', () => {
     expect(sanCovers('*.Example.COM', 'API.example.com.')).toBe(true);
   });
