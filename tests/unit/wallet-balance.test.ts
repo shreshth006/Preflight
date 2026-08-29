@@ -36,16 +36,42 @@ describe('wallet balance scorer summary', () => {
 
     const result = await getWalletBalance(ADDRESS, CHAIN, new Date('2026-08-29T00:00:00.000Z'));
 
-    // Address, amount and chain lead; the chain id is gone because no recorded
-    // ground truth in this intent writes one.
+    // Address, amount, chain and the RPC method are the measured truth shape;
+    // account metadata remains structured rather than diluting the prose.
     expect(result.reason).toContain(ADDRESS);
     expect(result.reason).toContain('1 TST');
     expect(result.reason).toContain('on Test Chain');
-    expect(result.reason).toContain('1000000000000000000 wei');
+    expect(result.reason).toContain('eth_getBalance RPC method');
+    expect(result.reason).not.toContain('1000000000000000000 wei');
     expect(result.reason).not.toContain('chain ID 123');
-    expect(result.reason).not.toMatch(/outbound transaction|observed at block/i);
+    expect(result.reason).not.toMatch(/account|ERC-20|outbound transaction|observed at block/i);
     expect(result.transaction_count).toBe(42);
     expect(result.block_number).toBe(11_259_375);
+  });
+
+  it('states the zero RPC result in the truth-shaped summary', async () => {
+    const results: Record<string, string> = {
+      eth_getBalance: '0x0',
+      eth_getTransactionCount: '0x0',
+      eth_getCode: '0x',
+      eth_blockNumber: '0xabcdef',
+    };
+    vi.stubGlobal('fetch', (_input: string | URL | Request, init?: RequestInit) => {
+      const bodyText = typeof init?.body === 'string' ? init.body : '';
+      const body = JSON.parse(bodyText) as { method: string };
+      return Promise.resolve(
+        new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: results[body.method] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    });
+
+    const result = await getWalletBalance(ADDRESS, CHAIN, new Date('2026-08-29T00:00:00.000Z'));
+
+    expect(result.reason).toContain('native-coin balance of 0 TST');
+    expect(result.reason).toContain('RPC result was 0x0, indicating a zero balance');
+    expect(result.verdict).toBe('empty');
   });
 });
 

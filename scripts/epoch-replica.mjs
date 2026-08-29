@@ -35,8 +35,13 @@ const ENDPOINTS = {
   URL_SCAN: (q) => `/url-scan?question=${encodeURIComponent(q)}${urlFrom(q) ? `&url=${encodeURIComponent(urlFrom(q))}` : ''}`,
   GAS_PRICE: () => `/gas-price?chain=ethereum`,
   ONCHAIN_TX_LOOKUP: (q) => `/tx-lookup?chain=ethereum&hash=${encodeURIComponent(hashFrom(q) ?? '')}`,
-  TVL_LOOKUP: (q) =>
-    `/tvl?protocol=${encodeURIComponent(protocolFrom(q))}&chain=ethereum&question=${encodeURIComponent(q)}`,
+  TVL_LOOKUP: (q) => {
+    const chain = namedChainFrom(q);
+    return (
+      `/tvl?protocol=${encodeURIComponent(protocolFrom(q))}&question=${encodeURIComponent(q)}` +
+      (chain ? `&chain=${encodeURIComponent(chain)}` : '')
+    );
+  },
   CRYPTO_PRICE: (q) => `/crypto-price?question=${encodeURIComponent(q)}`,
   // The question is passed alongside the extracted parameter, because the
   // parameters alone lose information the endpoint uses -- a malformed address
@@ -54,7 +59,9 @@ const urlFrom = (q) => /https?:\/\/\S+/i.exec(q)?.[0] ?? (hostFrom(q) ? `https:/
 const hashFrom = (q) => /\b0x[0-9a-f]{64}\b/i.exec(q)?.[0] ?? null;
 const addressFrom = (q) => /\b0x[0-9a-fA-F]{40}\b/.exec(q)?.[0] ?? null;
 const ipFrom = (q) => /\b(?:\d{1,3}\.){3}\d{1,3}\b/.exec(q)?.[0] ?? null;
-const chainFrom = (q) => /\b(arbitrum|base|optimism|polygon|sepolia|ethereum)\b/i.exec(q)?.[1]?.toLowerCase() ?? 'ethereum';
+const namedChainFrom = (q) =>
+  /\b(arbitrum|base|optimism|polygon|sepolia|ethereum)\b/i.exec(q)?.[1]?.toLowerCase() ?? null;
+const chainFrom = (q) => namedChainFrom(q) ?? 'ethereum';
 const protocolFrom = (q) => /\b(aave\s*v?\d*)\b/i.exec(q)?.[1] ?? 'Aave V3';
 
 function loadChampions() {
