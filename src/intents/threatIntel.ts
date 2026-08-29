@@ -45,9 +45,9 @@ const REFERENCES: ThreatReference[] = [
     name: 'SUNBURST (SolarWinds Orion supply-chain compromise)',
     disposition: 'malicious',
     facts: [
-      'avsvmcloud.com was the command-and-control domain used by the SUNBURST backdoor, which was distributed inside signed SolarWinds Orion platform updates.',
-      'Compromised hosts contacted algorithmically generated subdomains of avsvmcloud.com, which encoded victim identifiers and were used to select targets for follow-on activity.',
-      'The intrusion was disclosed by FireEye in December 2020, and the domain was subsequently seized and sinkholed by Microsoft, FireEye and GoDaddy, which converted it into a killswitch that disabled the backdoor.',
+      'avsvmcloud.com was the command-and-control domain for the SUNBURST backdoor, distributed through a trojanized update to the SolarWinds Orion platform.',
+      'The malware used a domain generation algorithm to resolve subdomains of avsvmcloud.com. Those lookups encoded victim identifiers, and the responses returned CNAME records pointing to second-stage infrastructure for the targets the operators chose to pursue.',
+      'The intrusion was disclosed by FireEye on 13 December 2020, and the domain was subsequently seized and sinkholed by Microsoft, FireEye and GoDaddy, which converted it into a killswitch that disabled the backdoor.',
       'The United States government attributed the campaign to the Russian Foreign Intelligence Service, SVR, in April 2021.',
     ],
   },

@@ -42,6 +42,60 @@ const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|
 // and the provider rejects what is not an address.
 const IPV6 = /\b(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}\b/;
 
+/**
+ * Address blocks that are reserved rather than routed, with the reason.
+ *
+ * A reserved address has no geolocation by design, and saying so is the
+ * answer -- not a lookup failure. Measured against a recorded ground truth for
+ * this intent: 192.0.2.1 is TEST-NET-1, "explicitly reserved for documentation
+ * and examples", and we were reporting it as a temporary upstream outage.
+ *
+ * Ordered most specific first, since 192.0.2.0/24 sits inside no broader entry
+ * here but future additions might.
+ */
+const RESERVED: Array<{ test: RegExp; name: string; rfc: string; note: string }> = [
+  { test: /^0\./, name: 'the "this network" block (0.0.0.0/8)', rfc: 'RFC 1122',
+    note: 'used only as a source address before an address is assigned' },
+  { test: /^10\./, name: 'private address space (10.0.0.0/8)', rfc: 'RFC 1918',
+    note: 'routable only inside a private network' },
+  { test: /^127\./, name: 'the loopback block (127.0.0.0/8)', rfc: 'RFC 1122',
+    note: 'it always refers to the querying host itself' },
+  { test: /^169\.254\./, name: 'the link-local block (169.254.0.0/16)', rfc: 'RFC 3927',
+    note: 'self-assigned when no DHCP server answers' },
+  { test: /^172\.(1[6-9]|2\d|3[01])\./, name: 'private address space (172.16.0.0/12)', rfc: 'RFC 1918',
+    note: 'routable only inside a private network' },
+  { test: /^192\.0\.2\./, name: 'TEST-NET-1 (192.0.2.0/24)', rfc: 'RFC 5737',
+    note: 'reserved for documentation and examples, and should not appear on the public internet' },
+  { test: /^192\.168\./, name: 'private address space (192.168.0.0/16)', rfc: 'RFC 1918',
+    note: 'routable only inside a private network' },
+  { test: /^198\.1[89]\./, name: 'the benchmarking block (198.18.0.0/15)', rfc: 'RFC 2544',
+    note: 'reserved for network device performance testing' },
+  { test: /^198\.51\.100\./, name: 'TEST-NET-2 (198.51.100.0/24)', rfc: 'RFC 5737',
+    note: 'reserved for documentation and examples, and should not appear on the public internet' },
+  { test: /^203\.0\.113\./, name: 'TEST-NET-3 (203.0.113.0/24)', rfc: 'RFC 5737',
+    note: 'reserved for documentation and examples, and should not appear on the public internet' },
+  { test: /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./, name: 'the shared address space (100.64.0.0/10)', rfc: 'RFC 6598',
+    note: 'used between a subscriber and a carrier-grade NAT' },
+  { test: /^(22[4-9]|23\d)\./, name: 'the multicast block (224.0.0.0/4)', rfc: 'RFC 5771',
+    note: 'a group address rather than a host address' },
+  { test: /^(24\d|25[0-5])\./, name: 'the reserved block (240.0.0.0/4)', rfc: 'RFC 1112',
+    note: 'reserved for future use and not routed' },
+  { test: /^::1$/, name: 'the IPv6 loopback address (::1)', rfc: 'RFC 4291',
+    note: 'it always refers to the querying host itself' },
+  { test: /^f[cd]/i, name: 'the IPv6 unique local block (fc00::/7)', rfc: 'RFC 4193',
+    note: 'routable only inside a private network' },
+  { test: /^fe[89ab]/i, name: 'the IPv6 link-local block (fe80::/10)', rfc: 'RFC 4291',
+    note: 'valid only on a single link' },
+  { test: /^2001:0?db8:/i, name: 'the IPv6 documentation block (2001:db8::/32)', rfc: 'RFC 3849',
+    note: 'reserved for documentation and examples, and should not appear on the public internet' },
+];
+
+/** The reserved block an address belongs to, or null when it is routable. */
+export function reservedBlock(ip: string): { name: string; rfc: string; note: string } | null {
+  for (const entry of RESERVED) if (entry.test.test(ip)) return entry;
+  return null;
+}
+
 /** The IP address named anywhere in the text, or null. */
 export function ipIn(text: string): string | null {
   return IPV4.exec(text)?.[0] ?? IPV6.exec(text)?.[0] ?? null;
@@ -125,29 +179,32 @@ export async function locateIp(
     };
   }
 
+  // A reserved address is a real answer rather than an outage, and the
+  // provider reports it the same way it reports a failure -- so it is
+  // classified before anything is asked upstream.
+  const reserved = reservedBlock(ip);
+  if (reserved) {
+    return {
+      ...base,
+      ...empty,
+      source: `${reserved.rfc} address registry`,
+      ip,
+      found: false,
+      verdict: 'not_found',
+      reason:
+        `The IP address ${ip} is part of ${reserved.name}, which ${reserved.rfc} reserves: ` +
+        `${reserved.note}. It is therefore not routable on the public internet and has no ` +
+        `geolocation, no assigned ISP, no autonomous system and no abuse history, because no ` +
+        `organisation holds it and no traffic to it crosses the public internet.`,
+    };
+  }
+
   const primary = await getJson<IpApiPayload>(
     `${IP_API}/${encodeURIComponent(ip)}?fields=status,message,city,regionName,region,country,countryCode,lat,lon,timezone,isp,org,as,query`,
     9_000,
   );
 
   if (!primary || primary.status !== 'success') {
-    // A private or reserved address is a real answer, not an outage, and the
-    // provider reports it the same way it reports a failure -- so the
-    // distinction is drawn here rather than reported as "unavailable".
-    const reserved = /^(10\.|127\.|192\.168\.|169\.254\.|0\.)/.test(ip) || /^172\.(1[6-9]|2\d|3[01])\./.test(ip);
-    if (reserved) {
-      return {
-        ...base,
-        ...empty,
-        ip,
-        found: false,
-        verdict: 'not_found',
-        reason:
-          `${ip} is in private or reserved address space and has no public geolocation. ` +
-          `Addresses in these ranges are not routable on the public internet, so they are not ` +
-          `assigned to a location, an ISP or an autonomous system.`,
-      };
-    }
     const fallback = await getJson<IpapiCoPayload>(
       `${IPAPI_CO}/${encodeURIComponent(ip)}/json/`,
       8_000,

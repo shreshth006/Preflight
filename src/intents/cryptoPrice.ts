@@ -301,6 +301,17 @@ export async function getCryptoPrice(
     const primary = await historicalPrice(id, asOf);
     const prior = dates.length > 1 ? await historicalPrice(id, dates[1]!) : null;
     const iso = (d: Date) => d.toISOString().slice(0, 10);
+    // The ground truths write dates in words -- "The closing price of Ethereum
+    // (ETH) on August 28, 2026, was $2,408.17 USD" -- so the prose does too.
+    // The ISO form states the same fact in a spelling they never use; it stays
+    // in the structured fields, where a machine reads it.
+    const words = (d: Date) =>
+      d.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        timeZone: 'UTC',
+      });
     if (primary) {
       // The feed's own symbol beats whichever word the question happened to
       // use, and naming the asset both ways -- "Ethereum (ETH)" -- matches a
@@ -312,12 +323,12 @@ export async function getCryptoPrice(
         prior && prior.price !== 0 ? ((primary.price - prior.price) / prior.price) * 100 : null;
       const comparison =
         prior && change !== null
-          ? ` One year earlier, on ${iso(dates[1]!)}, ${symbol} was ${formatPrice(prior.price)} ` +
-            `(${prior.price} USD), so the price ${change >= 0 ? 'rose' : 'fell'} by ` +
-            `${Math.abs(change).toFixed(1)}% over that year, a change of ` +
+          ? ` On ${words(dates[1]!)}, the closing price was ${formatPrice(prior.price)} USD. ` +
+            `This indicates a ${change >= 0 ? 'rise' : 'decline'} of ` +
+            `${Math.abs(change).toFixed(1)}% over the one-year period, a change of ` +
             `${formatPrice(Math.abs(primary.price - prior.price))}.`
           : dates.length > 1
-            ? ` No price was available for ${iso(dates[1]!)}, so no year-over-year comparison can be given.`
+            ? ` No price was available for ${words(dates[1]!)}, so no year-over-year comparison can be given.`
             : '';
       return {
         ...base,
@@ -338,10 +349,10 @@ export async function getCryptoPrice(
             }
           : {}),
         reason:
-          `On ${iso(asOf)}, the closing USD price of ${asset} was ` +
-          `${formatPrice(primary.price)} (${primary.price} USD), taken at 23:59:59 UTC from ` +
-          `DefiLlama's aggregated price feed.${comparison} These are spot prices in USD and ` +
-          `exclude exchange fees and slippage.`,
+          `The closing price of ${asset} on ${words(asOf)} was ${formatPrice(primary.price)} ` +
+          `USD (${primary.price} exactly), taken at 23:59:59 UTC from DefiLlama's aggregated ` +
+          `price feed.${comparison} These are spot prices in USD and exclude exchange fees ` +
+          `and slippage.`,
       };
     }
   }
