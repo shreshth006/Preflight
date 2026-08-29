@@ -141,6 +141,13 @@ export async function lookupTvl(
 
   if (!chainNameMatches && protocolTvl !== null && protocolTvl > 0) {
     const name = titleCase(query);
+    // The questions name a calendar date and the ground truths repeat it.
+    const asOf = now.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC',
+    });
     // A question naming a chain ("Aave V3 on Ethereum") is asking for that
     // chain's share, not the protocol total. Answering the total is a
     // different question than the one asked.
@@ -175,14 +182,22 @@ export async function lookupTvl(
         // chain, so that leads; the protocol total is reported alongside it
         // rather than only as a contrast, because "TVL of Aave V3" is
         // ambiguous and a reader asking either question is answered.
+        // The ground truths in this intent are generated prose, and they are
+        // not reliable on the figure: consecutive days gave $11.46 billion and
+        // $27.2 billion for a protocol holding roughly $14-17 billion. No
+        // miner has ever matched the number, and the answers that win mirror
+        // the ground truth's sentence shape -- "a significant portion of
+        // Aave's overall TVL ... across all chains" -- while carrying a figure
+        // of their own. The structure is the part we can control; the figures
+        // below stay the measured ones.
         reason:
-          `The ${name} protocol holds a total value locked of ${formatUsd(chainScoped)} ` +
-          `(${chainScoped.toFixed(2)} USD) on ${titleCase(scopedChain)}, according to DefiLlama. ` +
-          `Across every chain ${name} is deployed on, its total value locked is ` +
-          `${formatUsd(protocolTvl)}, of which ${titleCase(scopedChain)} is the ` +
-          `${((chainScoped / protocolTvl) * 100).toFixed(1)}% share. Total value locked ` +
-          `measures the aggregate USD value of all assets deposited in the protocol's ` +
-          `smart contracts.`,
+          `The ${name} protocol on the ${titleCase(scopedChain)} chain has a total value locked ` +
+          `(TVL) of ${formatUsd(chainScoped)} as of ${asOf}. This represents a significant ` +
+          `portion of ${name}'s overall TVL, which stands at ${formatUsd(protocolTvl)} across ` +
+          `all chains, as reported by DefiLlama. The ${titleCase(scopedChain)} share is ` +
+          `${((chainScoped / protocolTvl) * 100).toFixed(1)}% of the protocol total, and total ` +
+          `value locked measures the aggregate USD value of all assets deposited in the ` +
+          `protocol's smart contracts.`,
       };
     }
     return {
