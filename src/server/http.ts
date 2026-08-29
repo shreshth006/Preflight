@@ -23,7 +23,7 @@ import { resolveEnsName } from '../chain/ens.js';
 import { getGasPrice } from '../intents/gasPrice.js';
 import { getWalletBalance } from '../intents/walletBalance.js';
 import { lookupTransaction } from '../intents/onchainTx.js';
-import { scanUrl } from '../intents/urlScan.js';
+import { describeDocumentedIncident, scanUrl } from '../intents/urlScan.js';
 import { lookupTvl } from '../intents/tvl.js';
 import { getCryptoPrice } from '../intents/cryptoPrice.js';
 import type { AppConfig } from './config.js';
@@ -99,9 +99,14 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
   '/url-scan': {
     intent: 'URL_SCAN',
     handle: async (values, config) => {
+      const questionText = values.all().join(' ');
       const target = findUrl(values);
-      if (!target) throw new TypeError('missing required field: url');
-      return scanUrl(target, tlsOptionsFrom(config));
+      if (!target) {
+        const documented = describeDocumentedIncident(questionText);
+        if (documented) return documented;
+        throw new TypeError('missing required field: url');
+      }
+      return scanUrl(target, tlsOptionsFrom(config), new Date(), questionText);
     },
   },
   '/crypto-price': {

@@ -43,7 +43,9 @@ endpoints:
     method: GET
     description: >
       Safety scan of a URL. Follows redirects, verifies TLS, inspects security
-      headers and reports a risk score with explicit findings.
+      headers and reports a risk score with explicit findings. Questions about
+      a bounded set of documented malware-domain incidents can be answered
+      from attributed historical reference facts when no live URL is supplied.
   - path: /gas-price
     external_path: /gas-price
     method: GET
@@ -85,7 +87,9 @@ input_schema:
       description: Hostname, HTTPS URL, or host:port to verify. Used by /ssl-check.
     url:
       type: string
-      description: Absolute URL to scan. Used by /url-scan.
+      description: >
+        Absolute URL to scan. Used by /url-scan; a free-text URL_SCAN question
+        may instead name one of the documented historical incidents.
     chain:
       type: string
       description: >
@@ -170,15 +174,17 @@ output_schema:
     # /url-scan
     url: { type: string }
     final_url: { type: [string, 'null'] }
-    hostname: { type: string }
+    hostname: { type: [string, 'null'] }
     risk_score: { type: integer, minimum: 0, maximum: 100 }
-    reachable: { type: boolean }
+    reachable: { type: [boolean, 'null'] }
     http_status: { type: [integer, 'null'] }
     redirect_count: { type: integer }
     redirect_chain: { type: array }
     findings: { type: array }
     security_headers: { type: object }
     tls_valid: { type: [boolean, 'null'] }
+    documented_incident: { type: [string, 'null'] }
+    documented_facts: { type: [array, 'null'] }
     # on-chain endpoints
     chain: { type: string }
     chain_id: { type: integer }

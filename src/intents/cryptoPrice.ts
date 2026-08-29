@@ -86,8 +86,18 @@ function formatSupply(value: number): string {
 }
 
 const MONTHS = [
-  'january', 'february', 'march', 'april', 'may', 'june',
-  'july', 'august', 'september', 'october', 'november', 'december',
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
 ];
 
 /**
@@ -128,9 +138,9 @@ async function historicalPrice(
   id: string,
   date: Date,
 ): Promise<{ price: number; confidence: number | null; symbol: string | null } | null> {
-  const ts = Math.floor(Date.UTC(
-    date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59,
-  ) / 1000);
+  const ts = Math.floor(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59) / 1000,
+  );
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 9_000);
   try {

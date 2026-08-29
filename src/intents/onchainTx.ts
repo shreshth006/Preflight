@@ -155,8 +155,7 @@ export async function lookupTransaction(
   // this intent are specific ("are the sender and recipient the same?", "did it
   // call a contract?"). Stating those facts as fields, rather than leaving them
   // to be inferred from two address strings, is what puts them in the summary.
-  const selfTransfer =
-    tx.from && tx.to ? tx.from.toLowerCase() === tx.to.toLowerCase() : null;
+  const selfTransfer = tx.from && tx.to ? tx.from.toLowerCase() === tx.to.toLowerCase() : null;
   // Empty calldata is a plain value transfer; anything else is a call into a
   // contract. Only unknown when the node omitted `input` entirely.
   const calldata = tx.input;
@@ -173,15 +172,15 @@ export async function lookupTransaction(
     ? `is still pending and has not been included in a block`
     : receiptMissing
       ? `was included in a block, but its receipt could not be retrieved, so whether it succeeded or reverted cannot be stated`
-    : succeeded
-      ? `succeeded and is confirmed on chain`
-      : `was included in a block but reverted, so its intended effect did not take place`;
+      : succeeded
+        ? `succeeded and is confirmed on chain`
+        : `was included in a block but reverted, so its intended effect did not take place`;
   const transfer =
     valueWei === null || valueWei === 0n
-      // "0 ETH" rather than "no native ETH": a zero-value transfer is what the
-      // question asks about by name, and the digit is the token a ground truth
-      // stating the amount will carry.
-      ? `It sent 0 ${chain.symbol}`
+      ? // "0 ETH" rather than "no native ETH": a zero-value transfer is what the
+        // question asks about by name, and the digit is the token a ground truth
+        // stating the amount will carry.
+        `It sent 0 ${chain.symbol}`
       : `It sent ${value} ${chain.symbol}`;
   const parties = selfTransfer
     ? `from ${tx.from} back to the same address ${tx.to}, so the sender and the recipient are identical`

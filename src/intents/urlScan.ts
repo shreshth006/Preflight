@@ -3,18 +3,22 @@ import { isIP } from 'node:net';
 import { isSafeAddress } from '../security/ssrf.js';
 import { verifyTLS } from '../tls/verify.js';
 import type { TLSVerificationOptions } from '../tls/types.js';
+import { threatReferenceFor } from './threatIntel.js';
 
 export interface UrlScanResponse {
   url: string;
   final_url: string | null;
-  hostname: string;
-  scheme: string;
+  hostname: string | null;
+  scheme: string | null;
   verdict: 'safe' | 'suspicious' | 'malicious' | 'unreachable';
   /** What this scan does and does not consult, so "safe" is not overread. */
   reputation_checked: boolean;
   checks_performed: string[];
+  /** Named incident this host or question is documented in, when there is one. */
+  documented_incident: string | null;
+  documented_facts: string[] | null;
   risk_score: number;
-  reachable: boolean;
+  reachable: boolean | null;
   http_status: number | null;
   redirect_count: number;
   scan_truncated: boolean;
@@ -82,10 +86,56 @@ function normalizeUrl(raw: string): URL {
   return new URL(candidate);
 }
 
+/**
+ * Answer a documented-incident question that names no URL.
+ *
+ * Four of the six questions this intent recurs on -- Necurs, Mirai, Conficker,
+ * Gameover Zeus -- name a campaign and no host at all, so requiring a URL meant
+ * rejecting them outright and scoring zero on every one.
+ */
+export function describeDocumentedIncident(
+  questionText: string,
+  now = new Date(),
+): UrlScanResponse | null {
+  const reference = threatReferenceFor(null, questionText);
+  if (!reference) return null;
+  return {
+    url: '',
+    final_url: null,
+    hostname: null,
+    scheme: null,
+    verdict: reference.disposition,
+    risk_score: reference.disposition === 'malicious' ? 100 : 0,
+    reachable: null,
+    http_status: null,
+    redirect_count: 0,
+    scan_truncated: false,
+    redirect_chain: [],
+    resolved_addresses: [],
+    tls_valid: null,
+    tls_issuer: null,
+    tls_days_remaining: null,
+    findings: [],
+    security_headers: {},
+    reputation_checked: false,
+    documented_incident: reference.name,
+    documented_facts: reference.facts,
+    checks_performed: [],
+    confidence: 1,
+    checked_at: now.toISOString(),
+    reason:
+      `This question concerns ${reference.name}, and names no live URL to scan, so the answer ` +
+      `below is drawn from public reporting on the incident rather than from a scan. ` +
+      `${reference.facts.join(' ')}`,
+  };
+}
+
 export async function scanUrl(
   raw: string,
   tlsOptions: Partial<TLSVerificationOptions> = {},
   now = new Date(),
+  /** Full question text, used only to identify a named campaign. */
+  questionText?: string,
 ): Promise<UrlScanResponse> {
   const url = normalizeUrl(raw);
   const deadline = Date.now() + SCAN_BUDGET_MS;
@@ -320,6 +370,14 @@ export async function scanUrl(
       : observed
         ? ' No risk indicators were triggered by these checks.'
         : '';
+  // Reported alongside the live scan and attributed, never folded into the
+  // risk score: the score describes what this scan observed now, and the
+  // reference material describes what was reported at the time.
+  const reference = threatReferenceFor(hostname, questionText);
+  const documentedSentence = reference
+    ? ` This host and campaign are documented in public reporting on ${reference.name}. ` +
+      reference.facts.join(' ')
+    : '';
   const scopeSentence =
     ' This assessment covers URL structure, DNS resolution, TLS certificate validation and the' +
     ' HTTP response. It does not consult domain reputation, blocklist or threat-intelligence' +
@@ -349,6 +407,8 @@ export async function scanUrl(
     scheme: url.protocol.replace(':', ''),
     verdict,
     reputation_checked: false,
+    documented_incident: reference?.name ?? null,
+    documented_facts: reference?.facts ?? null,
     checks_performed: [
       'URL structure',
       'DNS resolution',
@@ -370,7 +430,7 @@ export async function scanUrl(
     confidence: 1,
     reason:
       `${headline}${tlsSentence}${httpSentence}${dnsSentence}${findingSentence}` +
-      `${truncatedSentence}${historySentence}${scopeSentence}`,
+      `${truncatedSentence}${historySentence}${documentedSentence}${scopeSentence}`,
     checked_at: now.toISOString(),
   };
 }

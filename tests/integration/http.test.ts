@@ -84,4 +84,13 @@ describe('HTTP miner', () => {
     expect(response.status).toBe(200);
     expect(response.body.verdict).toBe('unreachable');
   });
+  it('answers URL_SCAN incident questions that contain no URL', async () => {
+    const question = encodeURIComponent(
+      "What is documented about Microsoft's 2020 takedown of the Necurs botnet?",
+    );
+    const response = await get(`/url-scan?q=${question}`);
+    expect(response.status).toBe(200);
+    expect(response.body.documented_incident).toBe('Necurs botnet takedown');
+    expect(response.body.hostname).toBeNull();
+  });
 });

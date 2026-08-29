@@ -70,10 +70,7 @@ export const CHAINS: Record<string, ChainInfo> = {
     chainId: 137,
     symbol: 'POL',
     decimals: 18,
-    rpcUrls: [
-      'https://polygon-bor-rpc.publicnode.com',
-      'https://polygon.drpc.org',
-    ],
+    rpcUrls: ['https://polygon-bor-rpc.publicnode.com', 'https://polygon.drpc.org'],
     explorer: 'https://polygonscan.com',
   },
   'base-sepolia': {

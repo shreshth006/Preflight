@@ -333,14 +333,14 @@ the local file byte-for-byte.
 
 ### Epoch 290 — first observed scores, and what the leaders did differently
 
-| intent | our score | rank | leader | leader score |
-|---|---|---|---|---|
-| TVL_LOOKUP | 0.013912294 | 2 / 8 | tvlwire-oracle | 0.019360716 |
-| ONCHAIN_TX_LOOKUP | 0.005998753 | 6 / 11 | veyctum | 0.011770244 |
-| SSL_VERIFICATION | 0.005964513 | 3 / 5 | livecert | 0.010202737 |
-| CRYPTO_PRICE | 0.000000000 | 4 / 11 | sentinel-risk-oracle | 0.000021456 |
-| URL_SCAN | 0.000000000 | 4 / 8 | chainsight-oracle | 0.000031675 |
-| GAS_PRICE | 0.000000000 | 3 / 8 | gaswire-evm-fees | 0.000000000 |
+| intent            | our score   | rank   | leader               | leader score |
+| ----------------- | ----------- | ------ | -------------------- | ------------ |
+| TVL_LOOKUP        | 0.013912294 | 2 / 8  | tvlwire-oracle       | 0.019360716  |
+| ONCHAIN_TX_LOOKUP | 0.005998753 | 6 / 11 | veyctum              | 0.011770244  |
+| SSL_VERIFICATION  | 0.005964513 | 3 / 5  | livecert             | 0.010202737  |
+| CRYPTO_PRICE      | 0.000000000 | 4 / 11 | sentinel-risk-oracle | 0.000021456  |
+| URL_SCAN          | 0.000000000 | 4 / 8  | chainsight-oracle    | 0.000031675  |
+| GAS_PRICE         | 0.000000000 | 3 / 8  | gaswire-evm-fees     | 0.000000000  |
 
 The scored text is `converted_answer` — the node's prose summary of our JSON —
 not our `reason` field directly, and not `miner_answer`.
@@ -356,31 +356,31 @@ mostly nulls, so there was little for the summariser to carry over.
 
 **What separated the leaders, intent by intent:**
 
-- *TVL_LOOKUP* asked for Aave V3 "on the Ethereum chain". We answered with the
+- _TVL_LOOKUP_ asked for Aave V3 "on the Ethereum chain". We answered with the
   all-chains total, $17.10B, where the Ethereum share is $14.43B — a different
   question. Worth recording that the epoch-290 leader also answered $17.1B and
   still won, which suggests the ground truth may itself be generated from
   DefiLlama's protocol-level endpoint. Both figures are therefore stated
   affirmatively rather than replacing one with the other.
 
-- *ONCHAIN_TX_LOOKUP* asked whether sender and recipient were the same. The
+- _ONCHAIN_TX_LOOKUP_ asked whether sender and recipient were the same. The
   leader named the address and said no contract call was involved. We said
   "from one address to itself" without the address, then spent the rest of the
   answer on fee and confirmation count.
 
-- *CRYPTO_PRICE* asked for a closing price on a named date and its change
+- _CRYPTO_PRICE_ asked for a closing price on a named date and its change
   against one year prior. Every miner scored ~0. The only non-zero answer in
   the intent was one that said the data was unavailable — an honest abstention
   outscored every confident current-spot-price answer, because a spot price
   answers a different question.
 
-- *URL_SCAN* asked what is documented about `avsvmcloud.com`, the SolarWinds
+- _URL_SCAN_ asked what is documented about `avsvmcloud.com`, the SolarWinds
   SUNBURST command-and-control domain. We ran a reachability check and replied
   "no risk indicators detected". The scan consults no reputation or
   threat-intelligence source, so that sentence claimed far more than it had
   established.
 
-- *GAS_PRICE* returned 0.000000000 for all eight miners including a detailed,
+- _GAS_PRICE_ returned 0.000000000 for all eight miners including a detailed,
   correct answer from the leader. Nothing in our output explains that, and no
   change was made on the strength of it.
 
@@ -391,3 +391,25 @@ same paragraph, and a JSON-RPC `"result": null` was being accepted as an answer
 so the endpoint failover never advanced. Ethereum was running on one live
 endpoint, `eth.llamarpc.com` having gone to non-JSON, which made that failure
 roughly one request in three.
+
+### v0.4 — URL_SCAN documented-incident answers (2026-08-29)
+
+**Change:** Added a bounded reference table for the six historical malware and
+botnet topics observed in URL_SCAN questions: SUNBURST/`avsvmcloud.com`, the
+WannaCry killswitch domain, Necurs, Mirai, Conficker, and Operation Tovar /
+Gameover Zeus. A campaign-only question no longer fails with HTTP 400. When a
+URL is present, historical facts are reported separately from the live scan and
+do not alter its live risk score.
+
+**Hypothesis:** The canonical answers ask what is documented about these
+incidents, so explicit incident names, domains, dates, actors, and disruption
+mechanisms should survive answer conversion and match materially better than a
+present-day reachability result.
+
+**Before:** URL_SCAN score `0.000000000` in epoch 290. The converted answer
+reported only current reachability and omitted the named SUNBURST incident.
+
+**After:** Not yet observed. Request count at the time of this code change: 0.
+
+**Conclusion:** Pending the next scored URL_SCAN receipt. Change one reference
+dimension at a time if the score remains below the historical leaders.
