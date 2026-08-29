@@ -184,6 +184,63 @@ async function rank(receipts, champions, only) {
   return summary;
 }
 
+/**
+ * Score our live answer against EVERY recorded question-and-truth pair in an
+ * intent, not just the most recent one.
+ *
+ * Each epoch regenerates the ground truth with a language model, so its shape
+ * varies even when the question repeats. Tuning against a single recorded
+ * truth optimises for one sample of that distribution and says nothing about
+ * the rest of it. What decides a run of epochs is the expected score across
+ * the distribution and how tightly it holds -- an answer scoring 1.0 on one
+ * truth shape and 0.001 on another is worse than one scoring 0.8 on both.
+ *
+ * So this reports the mean, the worst case, and how many pairs land near 1.0.
+ * Raising the worst case matters more than raising the best.
+ */
+async function robust(receipts, champions, only) {
+  console.log('Scoring live answers against every recorded truth in each intent.\n');
+  console.log('intent                  pairs   mean     min      p@>0.9  beats-field');
+  console.log('-'.repeat(74));
+  for (const [intent, path] of [...champions].sort()) {
+    if (only && intent !== only) continue;
+    const rows = receipts.filter((r) => r.intent === intent && r.converted_answer);
+    if (rows.length === 0) continue;
+    const byQ = new Map();
+    for (const r of rows) {
+      if (!byQ.has(r.question)) byQ.set(r.question, []);
+      byQ.get(r.question).push(r);
+    }
+    const mod = await loadScorer(path, intent);
+    const scores = [];
+    let beats = 0;
+    for (const [question, group] of byQ) {
+      const answer = await fetchAnswer(intent, question);
+      if (!answer) continue;
+      let v;
+      try {
+        v = mod.score(question, group[0].ground_truth, answer);
+      } catch {
+        continue;
+      }
+      if (!Number.isFinite(v)) continue;
+      scores.push(v);
+      if (v > Math.max(...group.map((g) => g.score))) beats += 1;
+    }
+    if (scores.length === 0) {
+      console.log(`${intent.padEnd(22)}  (no live answers)`);
+      continue;
+    }
+    const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
+    const min = Math.min(...scores);
+    const near = scores.filter((v) => v > 0.9).length;
+    console.log(
+      `${intent.padEnd(22)} ${String(scores.length).padStart(5)}   ${mean.toFixed(4)}   ${min.toFixed(4)}   ` +
+        `${String(near).padStart(2)}/${scores.length}    ${beats}/${scores.length}`,
+    );
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const only = args.includes('--intent') ? args[args.indexOf('--intent') + 1] : null;
@@ -191,7 +248,8 @@ async function main() {
   const champions = loadChampions();
   if (args.includes('--verify')) await verify(receipts, champions, only);
   else if (args.includes('--rank')) await rank(receipts, champions, only);
-  else console.error('usage: --verify | --rank [--intent NAME]');
+  else if (args.includes('--robust')) await robust(receipts, champions, only);
+  else console.error('usage: --verify | --rank | --robust [--intent NAME]');
 }
 
 await main();
