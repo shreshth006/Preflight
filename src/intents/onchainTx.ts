@@ -68,7 +68,9 @@ export async function lookupTransaction(
 
   const [tx, receipt0, headHex] = await Promise.all([
     rpcCall<RpcTx | null>(chain, 'eth_getTransactionByHash', [normalized]).catch(() => null),
-    rpcCall<RpcReceipt | null>(chain, 'eth_getTransactionReceipt', [normalized]).catch(() => null),
+    rpcCall<RpcReceipt | null>(chain, 'eth_getTransactionReceipt', [normalized], 8_000, true).catch(
+      () => null,
+    ),
     rpcCall<string>(chain, 'eth_blockNumber', []).catch(() => null),
   ]);
 
@@ -117,9 +119,13 @@ export async function lookupTransaction(
   // a mined transaction reads as receipt-unavailable on a transient miss.
   let receipt = receipt0;
   if (blockNumber !== null && !receipt) {
-    receipt = await rpcCall<RpcReceipt | null>(chain, 'eth_getTransactionReceipt', [
-      normalized,
-    ]).catch(() => null);
+    receipt = await rpcCall<RpcReceipt | null>(
+      chain,
+      'eth_getTransactionReceipt',
+      [normalized],
+      8_000,
+      true,
+    ).catch(() => null);
   }
 
   const pending = blockNumber === null;

@@ -135,6 +135,8 @@ export async function rpcCall<T>(
   method: string,
   params: unknown[],
   timeoutMs = 8_000,
+  /** Treat a null result as "ask the next endpoint" rather than an answer. */
+  requireNonNull = false,
 ): Promise<T> {
   let lastError: unknown;
   for (const url of chain.rpcUrls) {
@@ -151,6 +153,14 @@ export async function rpcCall<T>(
       const payload = (await response.json()) as { result?: T; error?: RpcError };
       if (payload.error) throw new Error(payload.error.message ?? 'rpc error');
       if (payload.result === undefined) throw new Error('rpc response contained no result');
+      // A null result is a well-formed answer, so the failover loop below does
+      // not treat it as an error. For lookups where null means "I do not have
+      // this yet" -- a receipt on a node lagging the chain head -- that answer
+      // is worth re-asking elsewhere before it is believed.
+      if (payload.result === null && requireNonNull && url !== chain.rpcUrls.at(-1)) {
+        lastError = new Error(`${url} returned null`);
+        continue;
+      }
       return payload.result;
     } catch (error) {
       lastError = error;
