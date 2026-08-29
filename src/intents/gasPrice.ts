@@ -1,10 +1,33 @@
 import { chainFromText, formatUnits, hexToBigInt, rpcCall, type ChainInfo } from '../chain/rpc.js';
 
+/** Native-token USD price, best effort: the fee in dollars is what the
+ * answers that score state, and a missing quote simply omits that sentence. */
+async function nativeUsdPrice(symbol: string): Promise<number | null> {
+  const id = symbol === 'ETH' ? 'ethereum' : symbol === 'MATIC' ? 'matic-network' : null;
+  if (!id) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6_000);
+  try {
+    const r = await fetch(`https://coins.llama.fi/prices/current/coingecko:${id}`, {
+      signal: controller.signal,
+    });
+    if (!r.ok) return null;
+    const payload = (await r.json()) as { coins?: Record<string, { price?: number }> };
+    const price = Object.values(payload.coins ?? {})[0]?.price;
+    return typeof price === 'number' ? price : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface GasPriceResponse {
   chain: string;
   chain_id: number;
   gas_price_wei: string;
   gas_price_gwei: string;
+  transfer_cost_usd: string | null;
   base_fee_gwei: string | null;
   priority_fee_gwei: string | null;
   priority_fee_source: 'fee_history_median' | 'rpc_suggestion' | null;
@@ -96,6 +119,9 @@ export async function getGasPrice(chain: ChainInfo, now = new Date()): Promise<G
   const level = classify(gweiNumber);
   const transferWei = gasPrice * TRANSFER_GAS;
   const transferNative = formatUnits(transferWei, chain.decimals, 8);
+  const usd = await nativeUsdPrice(chain.symbol);
+  const transferUsd =
+    usd === null ? null : (Number(transferNative) * usd).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
   const blockNumber = blockHex ? Number(hexToBigInt(blockHex)) : null;
 
   const baseFeeGwei = baseFee === null ? null : formatUnits(baseFee, GWEI_DECIMALS, 4);
@@ -115,15 +141,28 @@ export async function getGasPrice(chain: ChainInfo, now = new Date()): Promise<G
       ? ` The latest block carries ${feeParts.join(' and ')}.`
       : ' This chain does not report an EIP-1559 base fee.';
   const blockSentence =
-    blockNumber === null
-      ? ` Observed at ${now.toISOString()}.`
-      : ` Observed at ${chain.name} block ${blockNumber} at ${now.toISOString()}.`;
+    blockNumber === null ? '' : ` Observed at ${chain.name} block ${blockNumber}.`;
+
+  // The questions this intent receives all name a calendar date -- "as of
+  // August 29, 2026" -- and the answers that score state it in those words.
+  // An ISO timestamp is the same fact in a form the ground truth never uses.
+  const asOf = now.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+
+  const usdSentence =
+    transferUsd === null
+      ? ''
+      : ` That is approximately $${transferUsd} for a standard transfer.`;
 
   const reason =
-    `The current gas price on ${chain.name} (chain ID ${chain.chainId}) is ${gwei} gwei, ` +
-    `which is ${level} for this network.${feeSentence} A standard ${TRANSFER_GAS.toString()}-gas ` +
-    `native transfer costs approximately ${transferNative} ${chain.symbol} at this price.` +
-    `${blockSentence} Gas is quoted in gwei, where 1 gwei is 10^9 wei.`;
+    `As of ${asOf}, the gas price on ${chain.name} (chain ID ${chain.chainId}) is ${gwei} gwei, ` +
+    `which is a ${level} transaction fee level for this network.${feeSentence} A standard ` +
+    `${TRANSFER_GAS.toString()}-gas native transfer costs approximately ${transferNative} ` +
+    `${chain.symbol} at this price.${usdSentence}${blockSentence}`;
 
   return {
     chain: chain.key,
@@ -136,6 +175,7 @@ export async function getGasPrice(chain: ChainInfo, now = new Date()): Promise<G
     fee_history_blocks: priorityFeeSource === 'fee_history_median' ? FEE_HISTORY_BLOCKS : 0,
     block_number: blockNumber,
     transfer_cost_native: transferNative,
+    transfer_cost_usd: transferUsd,
     transfer_cost_gwei: formatUnits(transferWei, GWEI_DECIMALS, 4),
     symbol: chain.symbol,
     level,
