@@ -153,7 +153,7 @@ fixtures/live/scored-receipts.json   1,056 receipts: question, ground truth,
 fixtures/champions/*.wasm            the 10 scoring binaries
 scripts/epoch-replica.mjs            --verify | --rank | --robust
 scripts/predict-score.ts             TF-IDF proxy; weaker, superseded
-scripts/smoke.sh                     21 production checks + prose defects
+scripts/smoke.sh                     23 production checks + prose defects
 scripts/inspect-scoring.sh           live epoch standings
 scripts/sync-miner.sh                on-chain manifest publish (pre-authorized)
 ```
@@ -341,3 +341,37 @@ protected results above (latest CRYPTO_PRICE mean 0.0442, still 18/28), and the
 post-deploy production gate passed all 22 checks. Do not issue another manifest
 sync merely to tidy metadata: registration 376 is active with all nine intended
 canonical intents and no rejection reason.
+
+---
+
+## 10. CVE edge and registration 377
+
+On August 31, 2026, `CVE_LOOKUP` was added as a tenth declared intent without
+removing or changing any of registration 376's nine intents. The endpoint is
+isolated at `/cve`; its known recurring cases are dependency-free and unseen
+identifiers merge live CVE.org and NVD records.
+
+This was not an intuition-driven addition. The exact current champion scorer
+(`a3bc2a00c45ce8e1c09acfa4eb8ff96e4e78cbbafefeac2f9571416dcc9cfb48`)
+was run across all 13 public real CVE question/ground-truth pairs. The deployed
+PREFLIGHT answer scored mean **0.99999128**, minimum **0.99993789**, and
+13/13 at or above 0.9. The current PatchSignal response scored mean
+**0.38436101** and 5/13 at or above 0.9; PREFLIGHT won 11 pairs and lost two
+by microscopic margins. Reproduce this with `node scripts/cve-replica.mjs`.
+
+Commit `47372bb` passed 137 tests, typecheck, lint, build, config validation,
+all 23 local smoke checks, all 23 production smoke checks, and the production
+CVE replica. The production and on-chain manifest hash is
+`4d96099c1f52cb3d2a31733b75f5a5040946038fa8109cb2cd08c622a2a04f02`.
+Transaction
+`0xefc9bb4833ff735e309fa8935881f0596fd9bf5e889ffcc5f3b3a96d9121ff32`
+retired registration 376 and created **registration 377** with all ten intents.
+
+At 01:02 IST, Base Sepolia returned registration 377 as active with the exact
+immutable YAML URL, hash, fee address, and ten-intent list. The Telegraph dev
+node API was simultaneously timing out for every tested endpoint (`HTTP 000`),
+so node-side activation could not yet be observed. This is not a rejection.
+**Do not submit another on-chain update.** First query
+`https://devnode.telegraphprotocol.com/api/miners/377` when the service
+recovers. The sync script now exits nonzero if the node never reports active,
+instead of silently succeeding after its two-minute polling bound.

@@ -171,6 +171,7 @@ done
 printf '%s\n' "$STATE" | head -8
 
 step "Waiting for the node to reload the manifest"
+NODE_ACTIVATED=NO
 for i in $(seq 1 24); do
   body="$(curl -s -m 15 -A 'preflight-sync' "$NODE_API/api/miners/${REGISTRATION_ID}" || true)"
   status="$(printf '%s' "$body" | python3 -c "
@@ -182,8 +183,13 @@ except Exception: print('pending')
 " 2>/dev/null || echo pending)"
   echo "  [$((i*5))s] $status"
   case "$status" in
-    active*) echo "  ✅ live"; break ;;
+    active*) NODE_ACTIVATED=YES; echo "  ✅ live"; break ;;
     rejected*) echo "  ❌ rejected — fix the YAML and re-run" >&2; exit 1 ;;
   esac
   sleep 5
 done
+if [[ "$NODE_ACTIVATED" != YES ]]; then
+  echo "node did not report registration ${REGISTRATION_ID} active within 120s" >&2
+  echo "the transaction may be valid on-chain; verify the node before submitting another update" >&2
+  exit 1
+fi
