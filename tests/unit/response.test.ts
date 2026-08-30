@@ -86,6 +86,28 @@ describe('Telegraph response adapter', () => {
     expect(handshake.reason).not.toMatch(/does not resolve/i);
   });
 
+  it('uses the measured DNS methodology when the request deadline wins the DNS timer race', () => {
+    const timeout = toTelegraphResponse({
+      ...base,
+      input: 'api.paymentgateway.com',
+      normalizedHost: 'api.paymentgateway.com',
+      dnsResolved: false,
+      reachable: false,
+      handshakeSucceeded: false,
+      certificatePresent: false,
+      chainTrusted: null,
+      hostnameValid: null,
+      timeValid: null,
+      valid: false,
+      failureCode: 'TIMEOUT',
+      failureMessage: 'request deadline exceeded',
+      network: { resolvedAddresses: [] },
+    });
+    expect(timeout.reason).toMatch(/does not resolve to a server on the public internet/i);
+    expect(timeout.reason).toMatch(/openssl or curl/i);
+    expect(timeout.reason).toMatch(/Subject Alternative Names/i);
+  });
+
   it('reports a blocked private destination without claiming a DNS failure', () => {
     const blocked = toTelegraphResponse({
       ...base,

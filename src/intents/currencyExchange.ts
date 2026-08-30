@@ -12,6 +12,7 @@
  */
 
 const ER_API = 'https://open.er-api.com/v6/latest';
+const FRANKFURTER_API = 'https://api.frankfurter.dev/v1';
 
 /** Currency names the router is likely to send, mapped to ISO 4217 codes. */
 const NAMES: Record<string, string> = {
@@ -121,21 +122,59 @@ export function amountIn(
   text: string,
   known: Set<string>,
 ): { amount: number; base: string | null } {
+  // Calendar dates are not conversion amounts. Epoch 293 supplied
+  // `date=2026-08-28&from=USD&to=JPY`; the old fallback attached the day 28 to
+  // USD and claimed that 28 USD was being converted.
+  const amountText = text.replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ');
   // Up to three words between the figure and the currency covers "100 US
   // dollars" and "100 units of USD" without spanning a clause.
   const re = /(\d[\d,]*(?:\.\d+)?)\s*((?:[A-Za-z.]+\s+){0,3}[A-Za-z.]+)/g;
-  for (const m of text.matchAll(re)) {
+  for (const m of amountText.matchAll(re)) {
     const value = Number(m[1]!.replace(/,/g, ''));
     if (!Number.isFinite(value) || value <= 0) continue;
     const codes = currenciesIn(m[2] ?? '', known);
     if (codes.length > 0) return { amount: value, base: codes[0]! };
   }
-  const bare = /(\d[\d,]*(?:\.\d+)?)/.exec(text);
+  const bare = /(\d[\d,]*(?:\.\d+)?)/.exec(amountText);
   const value = bare ? Number(bare[1]!.replace(/,/g, '')) : NaN;
   return {
     amount: Number.isFinite(value) && value > 0 ? value : 1,
     base: null,
   };
+}
+
+function requestedDateIn(text: string): string | null {
+  const match = /\b(\d{4}-\d{2}-\d{2})\b/.exec(text)?.[1];
+  if (!match) return null;
+  const parsed = new Date(`${match}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== match
+    ? null
+    : match;
+}
+
+async function historicalRate(
+  date: string,
+  from: string,
+  to: string,
+): Promise<{ rate: number; date: string } | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 9_000);
+  try {
+    const url =
+      `${FRANKFURTER_API}/${encodeURIComponent(date)}?base=${encodeURIComponent(from)}` +
+      `&symbols=${encodeURIComponent(to)}`;
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { date?: string; rates?: Record<string, number> };
+    const rate = payload.rates?.[to];
+    return typeof rate === 'number' && Number.isFinite(rate) && rate > 0
+      ? { rate, date: payload.date ?? date }
+      : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function formatRate(value: number): string {
@@ -250,10 +289,36 @@ export async function getExchangeRate(
     };
   }
 
-  // Both legs are quoted against USD, so the cross rate is their ratio.
-  const rate = toRate / fromRate;
+  const requestedDate = requestedDateIn(query);
+  const historical = requestedDate ? await historicalRate(requestedDate, from, to) : null;
+  if (requestedDate && !historical) {
+    return {
+      ...base,
+      amount,
+      base: from,
+      quote: to,
+      rate: null,
+      rate_formatted: null,
+      converted: null,
+      inverse_rate: null,
+      as_of: null,
+      found: false,
+      verdict: 'unavailable',
+      reason:
+        `The historical ${from}/${to} exchange rate for ${requestedDate} could not be retrieved. ` +
+        'No current rate is substituted for the requested date.',
+    };
+  }
+
+  // Current rates are both quoted against USD, so their cross rate is the
+  // ratio. Historical Frankfurter responses quote the requested pair directly.
+  const rate = historical?.rate ?? toRate / fromRate;
   const converted = rate * amount;
-  const asOf = updated ? new Date(updated).toISOString() : null;
+  const asOf = historical
+    ? `${historical.date}T00:00:00.000Z`
+    : updated
+      ? new Date(updated).toISOString()
+      : null;
   const dateWords = (asOf ? new Date(asOf) : now).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -269,6 +334,7 @@ export async function getExchangeRate(
 
   return {
     ...base,
+    source: historical ? 'Frankfurter historical reference rates' : base.source,
     amount,
     base: from,
     quote: to,
@@ -279,10 +345,13 @@ export async function getExchangeRate(
     as_of: asOf,
     found: true,
     verdict: 'found',
-    reason:
-      `As of ${dateWords}, 1 ${from} is worth ${formatRate(rate)} ${to}, so the ${from}/${to} ` +
-      `exchange rate is ${formatRate(rate)}.${amountSentence} The inverse rate is ` +
-      `${formatRate(1 / rate)}, meaning 1 ${to} is worth ${formatRate(1 / rate)} ${from}. ` +
-      `Rates are mid-market reference rates and exclude any spread or fee a provider adds.`,
+    reason: historical
+      ? `On ${dateWords}, the ${from}/${to} exchange rate was ${formatRate(rate)}: 1 ${from} was ` +
+        `worth ${formatRate(rate)} ${to}.${amountSentence} This is the Frankfurter historical ` +
+        'reference rate.'
+      : `As of ${dateWords}, 1 ${from} is worth ${formatRate(rate)} ${to}, so the ${from}/${to} ` +
+        `exchange rate is ${formatRate(rate)}.${amountSentence} The inverse rate is ` +
+        `${formatRate(1 / rate)}, meaning 1 ${to} is worth ${formatRate(1 / rate)} ${from}. ` +
+        `Rates are mid-market reference rates and exclude any spread or fee a provider adds.`,
   };
 }

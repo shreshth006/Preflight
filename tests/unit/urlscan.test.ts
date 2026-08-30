@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { describeDocumentedIncident, scanUrl } from '../../src/intents/urlScan.js';
+import {
+  describeDocumentedIncident,
+  documentedPageReason,
+  scanUrl,
+} from '../../src/intents/urlScan.js';
+import { threatReferenceFor } from '../../src/intents/threatIntel.js';
 
 // These cases are decided from the URL itself, so they need no network.
 describe('url scan verdict precedence', () => {
@@ -56,6 +61,20 @@ describe('url scan verdict precedence', () => {
     expect(result.documented_incident).toBe('Necurs botnet takedown');
     expect(result.reason).not.toBe(result.documented_facts?.join(' '));
     expect(result.reason).toContain('127.0.0.1');
+  });
+
+  it('identifies the epoch-293 Microsoft/Necurs page without calling Microsoft malicious', () => {
+    const url = new URL(
+      'https://www.microsoft.com/en-us/msrc/blog/2020/07/01/microsoft-takedown-of-necurs-botnet-domain-infrastructure/',
+    );
+    const reference = threatReferenceFor(null, url.toString());
+    expect(reference).not.toBeNull();
+    const reason = documentedPageReason(url, 'safe', reference!);
+    expect(reason).toContain('safe to visit');
+    expect(reason).toContain('legitimate Microsoft Security Response Center page');
+    expect(reason).toContain('over 9 million computers');
+    expect(reason).toContain('over 6 million predicted command-and-control domains');
+    expect(reason!.length).toBeLessThan(500);
   });
 
   it('judges a private or reserved target unsafe rather than unreachable', async () => {

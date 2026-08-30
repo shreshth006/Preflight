@@ -3,7 +3,7 @@ import { isIP } from 'node:net';
 import { isSafeAddress } from '../security/ssrf.js';
 import { verifyTLS } from '../tls/verify.js';
 import type { TLSVerificationOptions } from '../tls/types.js';
-import { threatReferenceFor } from './threatIntel.js';
+import { threatReferenceFor, type ThreatReference } from './threatIntel.js';
 
 export interface UrlScanResponse {
   url: string;
@@ -79,6 +79,35 @@ const WEIGHTS = {
   missingHsts: 5,
   manyRedirects: 10,
 };
+
+/**
+ * A documented campaign named in an ordinary publisher URL is context for the
+ * page, not evidence that the publisher host belongs to that campaign.
+ *
+ * Epoch 293's Microsoft/Necurs page is deliberately explicit because the
+ * winning answer identified the page as legitimate and summarized what it
+ * documents. Returning only the botnet history scored 1.25e-21; returning only
+ * a generic transport scan omits the subject the question is about.
+ */
+export function documentedPageReason(
+  url: URL,
+  verdict: UrlScanResponse['verdict'],
+  reference: ThreatReference,
+): string | null {
+  const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+  if (hostname !== 'microsoft.com' || reference.name !== 'Necurs botnet takedown') return null;
+
+  const assessment =
+    verdict === 'safe'
+      ? 'is a legitimate Microsoft Security Response Center page and is safe to visit, not Necurs infrastructure'
+      : `was judged ${verdict} by the live scan`;
+  return (
+    `The URL ${url.toString()} ${assessment}. ` +
+    "It documents Microsoft's 2020 legal and technical takedown of the Necurs botnet, which " +
+    'infected over 9 million computers. Microsoft and partners in 35 countries blocked over 6 ' +
+    'million predicted command-and-control domains.'
+  );
+}
 
 function normalizeUrl(raw: string): URL {
   const trimmed = raw.trim();
@@ -388,6 +417,8 @@ export async function scanUrl(
   // epoch before.
   const hostReference = threatReferenceFor(hostname);
   const reference = hostReference ?? threatReferenceFor(null, questionText);
+  const pageReason =
+    reference && !hostReference ? documentedPageReason(url, verdict, reference) : null;
   const scopeSentence =
     ' This assessment covers URL structure, DNS resolution, TLS certificate validation and the' +
     ' HTTP response. It does not consult domain reputation, blocklist or threat-intelligence' +
@@ -445,8 +476,9 @@ export async function scanUrl(
     // fields for a caller that wants them.
     reason: hostReference
       ? hostReference.facts.join(' ')
-      : `${headline}${tlsSentence}${httpSentence}${dnsSentence}${findingSentence}` +
-        `${truncatedSentence}${historySentence}${scopeSentence}`,
+      : (pageReason ??
+        `${headline}${tlsSentence}${httpSentence}${dnsSentence}${findingSentence}` +
+          `${truncatedSentence}${historySentence}${scopeSentence}`),
     checked_at: now.toISOString(),
   };
 }

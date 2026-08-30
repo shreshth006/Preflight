@@ -123,7 +123,15 @@ function reasonFor(
     // giving the method. What loses it is operational noise: the failure code
     // alone cost a hundredfold, and length beyond roughly 500 characters
     // dilutes rather than adds.
-    if (result.failureCode === 'DNS_FAILURE') {
+    // A whole-request timeout can win the race with the DNS-specific timer.
+    // Epoch 293 hit exactly that shape for api.paymentgateway.com: DNS never
+    // completed, but failureCode was TIMEOUT, so the measured DNS methodology
+    // below was bypassed for a terse operational message. The observable stage
+    // is what matters, not which timer rejected first.
+    if (
+      result.failureCode === 'DNS_FAILURE' ||
+      (result.failureCode === 'TIMEOUT' && !result.dnsResolved)
+    ) {
       return (
         `The TLS/SSL certificate configuration for ${domain} cannot be analyzed and no issues can ` +
         `be reported, because the domain does not resolve to a server on the public internet and ` +

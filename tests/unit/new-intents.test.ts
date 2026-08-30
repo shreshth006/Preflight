@@ -36,6 +36,10 @@ describe('amountIn', () => {
   it('defaults to one unit when no figure is given', () => {
     expect(amountIn('USD to EUR rate', KNOWN)).toEqual({ amount: 1, base: null });
   });
+
+  it('does not treat an ISO calendar date as a conversion amount', () => {
+    expect(amountIn('2026-08-28 USD JPY', KNOWN)).toEqual({ amount: 1, base: null });
+  });
 });
 
 describe('ipIn', () => {
