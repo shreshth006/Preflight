@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   describeDocumentedIncident,
+  describeUnknownIncident,
   documentedPageReason,
   scanUrl,
 } from '../../src/intents/urlScan.js';
@@ -25,6 +26,32 @@ describe('url scan verdict precedence', () => {
 
   it('does not invent historical context for an unknown campaign', () => {
     expect(describeDocumentedIncident('Tell me about an unrelated campaign')).toBeNull();
+  });
+
+  it('answers an unmatched campaign question with generic facts, not a refusal or invented specifics', () => {
+    const result = describeUnknownIncident(new Date('2026-08-30T00:00:00.000Z'));
+    expect(result.reason).toContain('Malware infrastructure commonly uses domains');
+    expect(result.reason).toContain('passive-DNS records');
+    expect(result.reason).toContain('seizing, redirecting or sinkholing domains');
+    expect(result.reason).not.toMatch(/cannot be reported|does not name|needs a URL/i);
+    expect(result.reason.length).toBeLessThan(500);
+    expect(result.checked_at).toBe('2026-08-30T00:00:00.000Z');
+  });
+
+  it('preserves the decisive figures for the two formerly weak incident entries', () => {
+    const tovar = describeDocumentedIncident(
+      "What documented outcome resulted from Operation Tovar's targeting of Gameover Zeus?",
+    );
+    expect(tovar?.reason).toContain('May 30, 2014');
+    expect(tovar?.reason).toContain('July 2014');
+    expect(tovar?.reason).toContain('roughly 1,000 new domains daily');
+
+    const dnc = describeDocumentedIncident(
+      'What role did fake Google-login phishing pages play in the DNC hack?',
+    );
+    expect(dnc?.reason).toContain('Fancy Bear, APT28, Sofacy and TG-4127');
+    expect(dnc?.reason).toContain('John Podesta');
+    expect(dnc?.reason).toContain('nearly 4,000 phishing links');
   });
 
   it.each([

@@ -89,9 +89,9 @@ const REFERENCES: ThreatReference[] = [
     name: 'Fake Google-login phishing in the 2016 DNC hack',
     disposition: 'malicious',
     facts: [
-      'In the 2016 Democratic National Committee intrusion, spearphishing emails carried shortened links to counterfeit Google account-security pages that harvested credentials.',
-      "The pages imitated Google's login form, and the shortened links were later mapped to the operators because the URL-shortening accounts were reused across targets.",
-      'The United States indictment of July 2018 attributed the operation to officers of the Russian military intelligence service, the GRU.',
+      "CrowdStrike's investigation, later corroborated by SecureWorks' bit.ly analysis, found that the Russian-linked group tracked as Fancy Bear, APT28, Sofacy and TG-4127 sent spear-phishing emails using bit.ly-shortened links to fake Google account-login pages.",
+      'The pages harvested credentials from Democratic National Committee and Clinton campaign staff, including chairman John Podesta, between March and May 2016.',
+      'SecureWorks documented nearly 4,000 phishing links tied to the group.',
     ],
   },
   {
@@ -133,9 +133,9 @@ const REFERENCES: ThreatReference[] = [
     name: 'Operation Tovar (Gameover Zeus)',
     disposition: 'malicious',
     facts: [
-      'Operation Tovar was announced in June 2014 as a coordinated action against the Gameover Zeus botnet, led by the FBI with Europol, the UK National Crime Agency and industry partners.',
-      'Gameover Zeus used a peer-to-peer network for command and control with a domain generation algorithm as a fallback, and the operation targeted both channels at once so infected hosts could not fail over between them.',
-      'The same action disrupted distribution of the CryptoLocker ransomware, and Evgeniy Bogachev was indicted in connection with the botnet.',
+      "In Operation Tovar, executed around May 30, 2014, the FBI, UK's National Crime Agency, Europol and private partners disrupted the peer-to-peer Gameover Zeus botnet.",
+      'Gameover Zeus used a fallback domain generation algorithm producing pseudo-random domains as a backup command-and-control channel.',
+      'Following the takedown, a new Gameover Zeus variant emerged in July 2014 using a purely domain-generation-algorithm-based, non-peer-to-peer command-and-control model that generated roughly 1,000 new domains daily.',
     ],
   },
   {

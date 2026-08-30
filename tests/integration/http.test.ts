@@ -199,6 +199,18 @@ describe('HTTP miner', () => {
     expect(response.body.hostname).toBeNull();
   });
 
+  it('answers an unmatched URL_SCAN campaign question with generic infrastructure facts', async () => {
+    const question = encodeURIComponent(
+      'What is documented about the domain infrastructure used by the Example campaign?',
+    );
+    const response = await get(`/url-scan?question=${question}`);
+    expect(response.status).toBe(200);
+    expect(response.body.verdict).toBe('suspicious');
+    expect(response.body.reason).toContain('command-and-control');
+    expect(response.body.reason).toContain('sinkholing domains');
+    expect(response.body.reason).not.toMatch(/cannot be reported|needs a URL/i);
+  });
+
   it('preserves explicit FX semantics across adversarial parameter order', async () => {
     vi.stubGlobal('fetch', (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;

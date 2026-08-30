@@ -174,6 +174,45 @@ export function describeDocumentedIncident(
   };
 }
 
+/**
+ * Answer an unmatched campaign-infrastructure question without inventing facts
+ * about the named campaign. The prose stays at the level of methods and
+ * outcomes generally documented for malicious domain infrastructure.
+ */
+export function describeUnknownIncident(now = new Date()): UrlScanResponse {
+  const facts = [
+    'Malware infrastructure commonly uses domains for command-and-control, payload distribution, credential phishing or data exfiltration.',
+    'Investigators document those domains by correlating malware configuration, DNS and passive-DNS records, registration and hosting data, sinkhole telemetry and seized servers.',
+    'Disruption commonly involves registrars, hosting providers, courts and law enforcement seizing, redirecting or sinkholing domains to sever operator access and identify infected hosts.',
+  ];
+  return {
+    url: '',
+    final_url: null,
+    hostname: null,
+    scheme: null,
+    verdict: 'suspicious',
+    risk_score: 50,
+    reachable: null,
+    http_status: null,
+    redirect_count: 0,
+    scan_truncated: false,
+    redirect_chain: [],
+    resolved_addresses: [],
+    tls_valid: null,
+    tls_issuer: null,
+    tls_days_remaining: null,
+    findings: [],
+    security_headers: {},
+    reputation_checked: false,
+    documented_incident: null,
+    documented_facts: facts,
+    checks_performed: [],
+    confidence: 0.5,
+    checked_at: now.toISOString(),
+    reason: facts.join(' '),
+  };
+}
+
 export async function scanUrl(
   raw: string,
   tlsOptions: Partial<TLSVerificationOptions> = {},

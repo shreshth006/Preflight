@@ -27,7 +27,11 @@ import { getGasPrice } from '../intents/gasPrice.js';
 import { unanswerable } from '../telegraph/unanswerable.js';
 import { describeMalformedAddress, getWalletBalance } from '../intents/walletBalance.js';
 import { lookupTransaction } from '../intents/onchainTx.js';
-import { describeDocumentedIncident, scanUrl } from '../intents/urlScan.js';
+import {
+  describeDocumentedIncident,
+  describeUnknownIncident,
+  scanUrl,
+} from '../intents/urlScan.js';
 import { lookupTvl } from '../intents/tvl.js';
 import { getExchangeRate } from '../intents/currencyExchange.js';
 import { locateIp } from '../intents/ipGeolocation.js';
@@ -172,11 +176,13 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
   '/url-scan': {
     intent: 'URL_SCAN',
     handle: async (values, config) => {
-      const questionText = values.context() ?? values.text();
+      const questionContext = values.context();
+      const questionText = questionContext ?? values.text();
       const target = findUrl(values);
       if (!target) {
         const documented = describeDocumentedIncident(questionText);
         if (documented) return documented;
+        if (questionContext) return describeUnknownIncident();
         return unanswerable(
           'A URL safety assessment',
           'a URL or a documented incident',
