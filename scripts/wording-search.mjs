@@ -367,6 +367,8 @@ function walletCandidates(question, body) {
       truth_shape_register: body.reason,
       direct_rpc: body.reason,
       malformed_direct: body.reason,
+      dated_qualified: body.reason,
+      dated_method: body.reason,
       concise_missing:
         `No wallet address is specified, so a current native-coin balance cannot be reported on ` +
         `${chain}.`,
@@ -400,6 +402,19 @@ function walletCandidates(question, body) {
     `The address ${subject} currently has a native-coin balance of ${amount} on ${scope}. ` +
     `This was determined by querying the eth_getBalance RPC method against the ${rpcNetwork} network.` +
     zeroResult;
+  const requestedDate = datePhrase(question);
+  const datedQualified = requestedDate
+    ? `The address ${subject} currently has a native-coin balance of ${amount} on ${scope}. ` +
+      `That latest-block result does not establish its balance as of ${requestedDate}; a ` +
+      `historical balance requires the corresponding block through a blockchain explorer or ` +
+      `archive node on the ${rpcNetwork} network.`
+    : body.reason;
+  const datedMethod = requestedDate
+    ? `The exact native-coin balance of address ${subject} on ${scope} as of ${requestedDate} ` +
+      `requires querying the corresponding historical block through a blockchain explorer or ` +
+      `archive node. A current eth_getBalance call reports only the latest-block balance, not ` +
+      `the balance at that past date.`
+    : body.reason;
   return {
     current: body.reason,
     concise_missing: body.reason,
@@ -415,6 +430,8 @@ function walletCandidates(question, body) {
         `${chain}. The string contains 41 hexadecimal characters rather than the 40 required ` +
         `for an EVM address, so no account or balance exists at it.`
       : body.reason,
+    dated_qualified: datedQualified,
+    dated_method: datedMethod,
   };
 }
 

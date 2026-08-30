@@ -27,6 +27,42 @@ export interface WalletBalanceResponse {
 // wallet — including ordinary user wallets — as a contract.
 const DELEGATION_PREFIX = '0xef0100';
 
+function historicalDateIn(question: string): string | null {
+  return (
+    /\bas of ((?:January|February|March|April|May|June|July|August|September|October|November|December)(?:\s+\d{1,2},)?\s+\d{4})/i.exec(
+      question,
+    )?.[1] ?? null
+  );
+}
+
+/** Keep a latest-block balance from being presented as a historical balance. */
+export function contextualizeWalletBalance(
+  response: WalletBalanceResponse,
+  questionText?: string,
+): WalletBalanceResponse {
+  const requestedDate = historicalDateIn(questionText ?? '');
+  if (!requestedDate) return response;
+  const scope =
+    {
+      ethereum: 'Ethereum mainnet',
+      base: 'the Base chain',
+      arbitrum: 'Arbitrum',
+      sepolia: 'the Sepolia testnet',
+      'base-sepolia': 'the Sepolia testnet',
+    }[response.chain] ?? response.chain;
+  const subject = response.ens_name
+    ? `${response.ens_name} (${response.address})`
+    : response.address;
+  return {
+    ...response,
+    reason:
+      `The exact native-coin balance of address ${subject} on ${scope} as of ${requestedDate} ` +
+      `requires querying the corresponding historical block through a blockchain explorer or ` +
+      `archive node. A current eth_getBalance call reports only the latest-block balance, not ` +
+      `the balance at that past date.`,
+  };
+}
+
 function classifyAccount(code: string | null): {
   type: WalletBalanceResponse['account_type'];
   delegate: string | null;

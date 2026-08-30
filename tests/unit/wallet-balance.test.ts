@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChainInfo } from '../../src/chain/rpc.js';
-import { describeMalformedAddress, getWalletBalance } from '../../src/intents/walletBalance.js';
+import {
+  contextualizeWalletBalance,
+  describeMalformedAddress,
+  getWalletBalance,
+} from '../../src/intents/walletBalance.js';
 
 const ADDRESS = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045';
 const CHAIN: ChainInfo = {
@@ -47,6 +51,34 @@ describe('wallet balance scorer summary', () => {
     expect(result.reason).not.toMatch(/account|ERC-20|outbound transaction|observed at block/i);
     expect(result.transaction_count).toBe(42);
     expect(result.block_number).toBe(11_259_375);
+  });
+
+  it('does not present a latest-block result as a past-dated balance', async () => {
+    const results: Record<string, string> = {
+      eth_getBalance: '0xde0b6b3a7640000',
+      eth_getTransactionCount: '0x2a',
+      eth_getCode: '0x',
+      eth_blockNumber: '0xabcdef',
+    };
+    vi.stubGlobal('fetch', (_input: string | URL | Request, init?: RequestInit) => {
+      const bodyText = typeof init?.body === 'string' ? init.body : '';
+      const body = JSON.parse(bodyText) as { method: string };
+      return Promise.resolve(
+        new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: results[body.method] }), {
+          status: 200,
+        }),
+      );
+    });
+    const current = await getWalletBalance(ADDRESS, CHAIN, new Date('2026-08-30T00:00:00.000Z'));
+    const result = contextualizeWalletBalance(
+      current,
+      'What was the balance as of August 26, 2026?',
+    );
+    expect(result.balance).toBe('1');
+    expect(result.reason).toContain('as of August 26, 2026');
+    expect(result.reason).toContain('corresponding historical block');
+    expect(result.reason).toContain('latest-block balance');
+    expect(result.reason).not.toContain('balance of 1 TST');
   });
 
   it('states the zero RPC result in the truth-shaped summary', async () => {

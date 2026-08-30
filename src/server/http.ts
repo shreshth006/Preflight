@@ -25,7 +25,11 @@ import { chainFromText, lookupChain, resolveChain, SUPPORTED_CHAINS } from '../c
 import { resolveEnsName } from '../chain/ens.js';
 import { getGasPrice } from '../intents/gasPrice.js';
 import { unanswerable } from '../telegraph/unanswerable.js';
-import { describeMalformedAddress, getWalletBalance } from '../intents/walletBalance.js';
+import {
+  contextualizeWalletBalance,
+  describeMalformedAddress,
+  getWalletBalance,
+} from '../intents/walletBalance.js';
 import { lookupTransaction } from '../intents/onchainTx.js';
 import {
   describeDocumentedIncident,
@@ -138,21 +142,24 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
     intent: 'WALLET_BALANCE_CHECK',
     handle: async (values) => {
       const chain = chainFor(values);
+      const contextualize = (result: Awaited<ReturnType<typeof getWalletBalance>>) =>
+        contextualizeWalletBalance(result, values.context());
       const address = findAddress(values);
-      if (address) return getWalletBalance(address, chain);
+      if (address) return contextualize(await getWalletBalance(address, chain));
       // The intent explicitly covers ENS names, which resolve on mainnet
       // regardless of which chain the balance is then read from.
       const ensName = findEnsName(values);
       if (ensName) {
         const resolved = await resolveEnsName(ensName);
-        if (resolved) return getWalletBalance(resolved, chain, new Date(), ensName);
+        if (resolved)
+          return contextualize(await getWalletBalance(resolved, chain, new Date(), ensName));
         throw new TypeError(`ENS name does not resolve to an address: ${ensName}`);
       }
       // A hex string that was meant to be an address but is the wrong length
       // is a question we can answer rather than a request we should refuse:
       // no account exists at it, so its balance is zero.
       const malformed = findMalformedAddress(values);
-      if (malformed) return describeMalformedAddress(malformed, chain);
+      if (malformed) return contextualize(describeMalformedAddress(malformed, chain));
       return unanswerable(
         `A native-coin balance on ${chain.name}`,
         'a wallet address',
