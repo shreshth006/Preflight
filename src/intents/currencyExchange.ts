@@ -81,7 +81,7 @@ export function currenciesIn(text: string, known: Set<string>): string[] {
 
   // Multi-word names first, so "canadian dollar" wins over "dollar".
   for (const name of Object.keys(NAMES).sort((a, b) => b.length - a.length)) {
-    for (let from = 0; ; ) {
+    for (let from = 0; ;) {
       const at = lower.indexOf(name, from);
       if (at === -1) break;
       const before = at === 0 ? ' ' : lower[at - 1]!;
@@ -117,7 +117,10 @@ export function currenciesIn(text: string, known: Set<string>): string[] {
  * quoted INR/USD -- the inverse of the question. The currency carrying the
  * amount is the one being converted *from*, whatever order the sentence uses.
  */
-export function amountIn(text: string, known: Set<string>): { amount: number; base: string | null } {
+export function amountIn(
+  text: string,
+  known: Set<string>,
+): { amount: number; base: string | null } {
   // Up to three words between the figure and the currency covers "100 US
   // dollars" and "100 units of USD" without spanning a clause.
   const re = /(\d[\d,]*(?:\.\d+)?)\s*((?:[A-Za-z.]+\s+){0,3}[A-Za-z.]+)/g;

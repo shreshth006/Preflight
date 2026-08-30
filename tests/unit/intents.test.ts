@@ -152,6 +152,8 @@ describe('unsupported chains', () => {
   it('resolves known names but reports unknown ones as unknown', () => {
     expect(lookupChain('base')?.chainId).toBe(8453);
     expect(lookupChain('arb')?.chainId).toBe(42_161);
+    expect(lookupChain('sepolia')?.chainId).toBe(11_155_111);
+    expect(lookupChain('base-sepolia')?.chainId).toBe(84_532);
     // Silently defaulting these to Ethereum would answer a question that was
     // never asked, e.g. "gas on Avalanche" quoting Ethereum's gas price.
     expect(lookupChain('avalanche')).toBeUndefined();

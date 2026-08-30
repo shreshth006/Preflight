@@ -68,7 +68,7 @@ const REFERENCES: ThreatReference[] = [
     disposition: 'malicious',
     facts: [
       'On March 10, 2020, Microsoft announced a coordinated legal and technical takedown of the Necurs botnet, which had infected more than 9 million computers globally.',
-      'Microsoft analyzed Necurs\' domain generation algorithm and predicted over 6 million domains the botnet would have algorithmically generated over the following 25 months, then worked with partners in 35 countries to block them.',
+      "Microsoft analyzed Necurs' domain generation algorithm and predicted over 6 million domains the botnet would have algorithmically generated over the following 25 months, then worked with partners in 35 countries to block them.",
       'Necurs had been one of the largest distributors of spam and malware, and the action severed infected hosts from their operators.',
     ],
   },
@@ -78,9 +78,9 @@ const REFERENCES: ThreatReference[] = [
     name: 'British Airways Magecart breach',
     disposition: 'malicious',
     facts: [
-      'In the 2018 British Airways breach, attackers injected malicious JavaScript into the site\'s Modernizr.js library between August 21 and September 5, 2018.',
-      'The script skimmed payment-page form data and exfiltrated it to baways.com, a domain the Magecart-linked attackers registered to mimic British Airways\' own branding.',
-      'Several hundred thousand customers were affected, and the UK Information Commissioner\'s Office fined British Airways 20 million pounds for the breach.',
+      "In the 2018 British Airways breach, attackers injected malicious JavaScript into the site's Modernizr.js library between August 21 and September 5, 2018.",
+      "The script skimmed payment-page form data and exfiltrated it to baways.com, a domain the Magecart-linked attackers registered to mimic British Airways' own branding.",
+      "Several hundred thousand customers were affected, and the UK Information Commissioner's Office fined British Airways 20 million pounds for the breach.",
     ],
   },
   {
@@ -90,7 +90,7 @@ const REFERENCES: ThreatReference[] = [
     disposition: 'malicious',
     facts: [
       'In the 2016 Democratic National Committee intrusion, spearphishing emails carried shortened links to counterfeit Google account-security pages that harvested credentials.',
-      'The pages imitated Google\'s login form, and the shortened links were later mapped to the operators because the URL-shortening accounts were reused across targets.',
+      "The pages imitated Google's login form, and the shortened links were later mapped to the operators because the URL-shortening accounts were reused across targets.",
       'The United States indictment of July 2018 attributed the operation to officers of the Russian military intelligence service, the GRU.',
     ],
   },
@@ -124,7 +124,7 @@ const REFERENCES: ThreatReference[] = [
     facts: [
       'The Conficker worm, active in 2008 and 2009, used a domain generation algorithm seeded by the current date to locate its command-and-control servers rather than fixed addresses.',
       'The A and B variants generated 250 pseudo-random domains per day across 110 top-level domains, while the Conficker.C variant, active from April 1, 2009, escalated this to 50,000 candidate domains generated daily across 116 top-level domains, of which it would contact 500.',
-      'That scale was explicitly designed to defeat the Conficker Working Group\'s domain-blocking countermeasures, which pre-registered and sinkholed the generated domains.',
+      "That scale was explicitly designed to defeat the Conficker Working Group's domain-blocking countermeasures, which pre-registered and sinkholed the generated domains.",
     ],
   },
   {
@@ -144,7 +144,7 @@ const REFERENCES: ThreatReference[] = [
     name: 'Mirai botnet source code release',
     disposition: 'malicious',
     facts: [
-      'Mirai, the IoT botnet malware behind the record-breaking September 2016 DDoS attacks on Brian Krebs\' site and the host OVH, had its source code leaked publicly on Hack Forums by a user calling themselves Anna-senpai on September 30, 2016.',
+      "Mirai, the IoT botnet malware behind the record-breaking September 2016 DDoS attacks on Brian Krebs' site and the host OVH, had its source code leaked publicly on Hack Forums by a user calling themselves Anna-senpai on September 30, 2016.",
       'Academic follow-up research, presented at USENIX Security 2017 by Antonakakis and others, traced numerous command-and-control domains associated with post-leak Mirai variant clusters.',
       'That work found some of those domains had DNS lookup activity predating their actual use as command-and-control infrastructure by months, and the released code went on to seed many independent variants.',
     ],

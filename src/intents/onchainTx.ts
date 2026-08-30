@@ -70,8 +70,12 @@ export async function lookupTransaction(
     checked_at: now.toISOString(),
   };
 
+  let transactionLookupAnswered = true;
   const [tx, receipt0, headHex] = await Promise.all([
-    rpcCall<RpcTx | null>(chain, 'eth_getTransactionByHash', [normalized]).catch(() => null),
+    rpcCall<RpcTx | null>(chain, 'eth_getTransactionByHash', [normalized]).catch(() => {
+      transactionLookupAnswered = false;
+      return null;
+    }),
     rpcCall<RpcReceipt | null>(chain, 'eth_getTransactionReceipt', [normalized], 8_000, true).catch(
       () => null,
     ),
@@ -79,6 +83,7 @@ export async function lookupTransaction(
   ]);
 
   if (!tx) {
+    const status = transactionLookupAnswered ? 'not_found' : 'unavailable';
     return {
       ...base,
       found: false,
@@ -86,8 +91,8 @@ export async function lookupTransaction(
       contract_call: null,
       method_selector: null,
       value_exact: null,
-      status: 'not_found',
-      verdict: 'not_found',
+      status,
+      verdict: status,
       block_number: null,
       confirmations: null,
       from: null,
@@ -99,18 +104,21 @@ export async function lookupTransaction(
       effective_gas_price_gwei: null,
       fee_native: null,
       nonce: null,
-      reason:
-        `No transaction with hash ${normalized} was found on ${chain.name} (chain ID ` +
-        `${chain.chainId}). The hash is well formed, so it either belongs to a different ` +
-        `chain, has not yet propagated to the queried node, or was never broadcast. ` +
-        `Nothing can be reported about its status, sender, recipient or effect.`,
+      reason: transactionLookupAnswered
+        ? `No transaction with hash ${normalized} was found on ${chain.name} (chain ID ` +
+          `${chain.chainId}). The hash is well formed, so it either belongs to a different ` +
+          `chain, has not yet propagated to the queried node, or was never broadcast. ` +
+          `Nothing can be reported about its status, sender, recipient or effect.`
+        : `Transaction ${normalized} could not be looked up on ${chain.name} because every ` +
+          `configured RPC endpoint failed to answer. Its existence and status are unknown, ` +
+          `so it is reported as unavailable rather than not found.`,
     };
   }
 
   const head = headHex === null ? null : Number(hexToBigInt(headHex));
   const blockNumber = tx.blockNumber ? Number(hexToBigInt(tx.blockNumber)) : null;
   const confirmations =
-    head !== null && blockNumber !== null ? Math.max(0, head - blockNumber) : null;
+    head !== null && blockNumber !== null ? Math.max(0, head - blockNumber + 1) : null;
   const valueWei = tx.value ? hexToBigInt(tx.value) : null;
   const value = valueWei === null ? null : formatUnits(valueWei, chain.decimals, 8);
   // Full precision as well as the readable form. The ground truth states
@@ -140,7 +148,8 @@ export async function lookupTransaction(
   }
 
   const pending = blockNumber === null;
-  const receiptMissing = !pending && !receipt;
+  const receiptOutcomeKnown = receipt?.status === '0x0' || receipt?.status === '0x1';
+  const receiptMissing = !pending && (!receipt || !receiptOutcomeKnown);
   const succeeded = receipt?.status === '0x1';
   const status: TxLookupResponse['status'] = pending
     ? 'pending'
@@ -190,8 +199,7 @@ export async function lookupTransaction(
   // Two shapes, because the questions come in two kinds. A self-transfer
   // question is answered with the identity first; everything else leads with
   // the recipient, which is what these questions most often ask for.
-  const outcomeClause =
-    status === 'success' ? 'ok' : status === 'failed' ? 'reverted' : status;
+  const outcomeClause = status === 'success' ? 'ok' : status === 'failed' ? 'reverted' : status;
   const callClause = methodSelector
     ? ` The call invoked function selector ${methodSelector}.`
     : contractCall === false

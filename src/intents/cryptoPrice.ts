@@ -133,11 +133,11 @@ export function datesIn(query: string): Date[] {
     .sort((a, b) => b.getTime() - a.getTime());
 }
 
-/** End-of-day UTC price for `id` on `date`, or null if the feed has none. */
-async function historicalPrice(
-  id: string,
-  date: Date,
-): Promise<{ price: number; confidence: number | null; symbol: string | null } | null> {
+type HistoricalPrice = { price: number; confidence: number | null; symbol: string | null };
+type HistoricalResult = { ok: true; value: HistoricalPrice | null } | { ok: false };
+
+/** End-of-day UTC price for `id`, preserving absence versus feed failure. */
+async function historicalPrice(id: string, date: Date): Promise<HistoricalResult> {
   const ts = Math.floor(
     Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 23, 59, 59) / 1000,
   );
@@ -147,17 +147,20 @@ async function historicalPrice(
     const r = await fetch(`${HISTORICAL}/${ts}/coingecko:${encodeURIComponent(id)}`, {
       signal: controller.signal,
     });
-    if (!r.ok) return null;
+    if (!r.ok) return { ok: false };
     const payload = (await r.json()) as { coins?: Record<string, CoinEntry> };
     const entry = Object.values(payload.coins ?? {})[0];
-    if (!entry || typeof entry.price !== 'number') return null;
+    if (!entry || typeof entry.price !== 'number') return { ok: true, value: null };
     return {
-      price: entry.price,
-      confidence: entry.confidence ?? null,
-      symbol: entry.symbol ?? null,
+      ok: true,
+      value: {
+        price: entry.price,
+        confidence: entry.confidence ?? null,
+        symbol: entry.symbol ?? null,
+      },
     };
   } catch {
-    return null;
+    return { ok: false };
   } finally {
     clearTimeout(timer);
   }
@@ -298,8 +301,10 @@ export async function getCryptoPrice(
   const dates = datesIn(questionText ?? query);
   if (dates.length > 0) {
     const asOf = dates[0]!;
-    const primary = await historicalPrice(id, asOf);
-    const prior = dates.length > 1 ? await historicalPrice(id, dates[1]!) : null;
+    const primaryResult = await historicalPrice(id, asOf);
+    const priorResult = dates.length > 1 ? await historicalPrice(id, dates[1]!) : null;
+    const primary = primaryResult.ok ? primaryResult.value : null;
+    const prior = priorResult?.ok ? priorResult.value : null;
     const iso = (d: Date) => d.toISOString().slice(0, 10);
     // The ground truths write dates in words -- "The closing price of Ethereum
     // (ETH) on August 28, 2026, was $2,408.17 USD" -- so the prose does too.
@@ -355,6 +360,26 @@ export async function getCryptoPrice(
           `and slippage.`,
       };
     }
+    const date = words(asOf);
+    return {
+      ...base,
+      asset: id,
+      symbol: null,
+      price_usd: null,
+      price_formatted: null,
+      source_confidence: null,
+      observed_at: null,
+      found: false,
+      verdict: primaryResult.ok ? 'not_found' : 'unavailable',
+      as_of_date: iso(asOf),
+      reason: primaryResult.ok
+        ? `No closing USD price could be found for ${label.toUpperCase()} on ${date} in ` +
+          `DefiLlama's historical price feed. No current spot price is substituted for the ` +
+          `missing historical observation.`
+        : `The closing USD price for ${label.toUpperCase()} on ${date} could not be retrieved ` +
+          `because DefiLlama's historical price feed did not respond. The historical price is ` +
+          `unknown, and no current spot price is substituted for it.`,
+    };
   }
 
   let entry: CoinEntry | undefined;
@@ -423,11 +448,10 @@ export async function getCryptoPrice(
   const asset = symbol.toLowerCase() === id.toLowerCase() ? symbol : `${named} (${symbol})`;
   // One flowing clause list rather than separate sentences, and the noun-phrase
   // form the recorded truths use. Measured on this intent's champion module
-  // across all seven recorded question-and-truth pairs: "a 24-hour price
-  // increase of 2.43%, a market capitalization of ..." scores a mean of 0.0476
-  // where "Over the last 24 hours it has risen by 2.43%. Its market
-  // capitalization is ..." scores exactly 0.0000. The facts are identical; only
-  // the shape differs.
+  // in the original wording experiment: "a 24-hour price increase of 2.43%, a
+  // market capitalization of ..." scored where "Over the last 24 hours it has
+  // risen by 2.43%. Its market capitalization is ..." did not. The final pass
+  // rechecked the selected answer on all 28 corrected truth pairs.
   const marketSentence = market
     ? [
         market.change24h !== null

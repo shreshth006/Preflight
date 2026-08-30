@@ -163,6 +163,26 @@ export async function lookupTvl(
         }
       }
     }
+    if (chainHint && chainScoped === null) {
+      return {
+        ...base,
+        resolved_name: name,
+        kind: 'unavailable',
+        verdict: 'unavailable',
+        tvl_usd: null,
+        tvl_formatted: null,
+        change_1d_pct: null,
+        change_7d_pct: null,
+        category: null,
+        chains: [scopedChain],
+        symbol: null,
+        url: `https://defillama.com/protocol/${slug}`,
+        reason:
+          `The total value locked for the ${name} protocol on the ${titleCase(scopedChain)} ` +
+          `chain could not be retrieved from DefiLlama's per-chain data. The all-chain protocol ` +
+          `total is available, but it is not substituted for the requested chain-specific figure.`,
+      };
+    }
     if (chainScoped !== null) {
       return {
         ...base,
@@ -246,7 +266,7 @@ export async function lookupTvl(
 
   // Neither lookup reached DefiLlama, so nothing can be asserted about whether
   // the subject exists.
-  if (!protocolResult.ok && !chainsResult.ok) {
+  if (!protocolResult.ok || !chainsResult.ok) {
     return {
       ...base,
       resolved_name: null,

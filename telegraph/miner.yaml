@@ -114,7 +114,7 @@ input_schema:
       type: string
       description: >
         EVM chain name or alias — ethereum, base, arbitrum, optimism, polygon,
-        base-sepolia. Defaults to ethereum. Used by the on-chain endpoints.
+        sepolia, base-sepolia. Defaults to ethereum. Used by the on-chain endpoints.
     address:
       type: string
       description: 0x-prefixed EVM address. Used by /wallet-balance.

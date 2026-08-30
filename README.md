@@ -11,7 +11,7 @@ PREFLIGHT serves its infrastructure and on-chain signals through Telegraph.
 
 - **Live:** https://preflight-ssl-verification.vercel.app
 - **Source:** https://github.com/shreshth006/Preflight
-- **Registered:** Base Sepolia, registration `288`, slug `preflight-ssl-verification`
+- **Registered:** Base Sepolia, registration `308`, slug `preflight-ssl-verification`
 
 ## Try it
 
@@ -36,22 +36,25 @@ guard.
 | `ONCHAIN_TX_LOOKUP`    | `/tx-lookup`      | Status and effect of a transaction: block, confirmations, value, gas, fee                                            |
 | `TVL_LOOKUP`           | `/tvl`            | Total value locked for a protocol or chain                                                                           |
 | `CRYPTO_PRICE`         | `/crypto-price`   | USD spot price by ticker or name, with the observation timestamp                                                     |
+| `CURRENCY_EXCHANGE`    | `/fx-rate`        | Mid-market exchange rate and optional amount conversion                                                              |
+| `IP_GEOLOCATION`       | `/ip-geolocation` | Geographic and network-registration data for public IPs; reserved ranges are classified locally                      |
+| `STOCK_PRICE`          | `/stock-price`    | Current equity quote, previous close, daily change and listing venue                                                 |
 
-Chains: Ethereum, Base, Arbitrum One, OP Mainnet, Polygon PoS, Base Sepolia —
-two public RPC endpoints each, so one provider outage cannot take an intent
-offline. No endpoint requires an API key.
+Chains: Ethereum, Base, Arbitrum One, OP Mainnet, Polygon PoS, Ethereum Sepolia,
+Base Sepolia — multiple public RPC endpoints per chain, so one provider outage
+cannot take an intent offline. No endpoint requires an API key.
 
 ## Design notes
 
 Every response carries `verdict`, `confidence` and `reason`, so a single
-`signal_mapping` covers all seven intents.
+`signal_mapping` covers all ten intents.
 
 **Parameters are matched tolerantly.** The Engine classifies free-text
 questions and decides which key a value arrives under, so a hostname, URL,
 address, transaction hash or asset is also recovered from a sentence:
 `?query=Is the SSL certificate for github.com valid right now?` resolves the
-same as `?domain=github.com`. A request we cannot parse is a request we answer
-with an error instead of a verdict.
+same as `?domain=github.com`. A request we cannot parse still receives HTTP 200
+with a factual `not_found` reason instead of a transport error.
 
 **The reason field is the answer.** Telegraph's canonical scoring module grades
 answer text against ground truth, so every verdict path reports the facts it
@@ -60,8 +63,8 @@ protocol — rather than a one-line label.
 
 **Answers state their limits.** A `valid` certificate verdict says it covers
 chain trust, hostname and validity period, and that revocation was not checked.
-An explicitly named chain we do not serve is rejected rather than silently
-answered about Ethereum.
+An explicitly named chain we do not serve is answered with `not_found` prose
+rather than silently answered about Ethereum or rejected with an HTTP error.
 
 ## Running it
 

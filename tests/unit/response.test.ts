@@ -55,4 +55,56 @@ describe('Telegraph response adapter', () => {
       }).verdict,
     ).toBe('unreachable');
   });
+
+  it('does not describe every unreachable target as a DNS failure', () => {
+    const tcp = toTelegraphResponse({
+      ...base,
+      reachable: false,
+      handshakeSucceeded: false,
+      certificatePresent: false,
+      chainTrusted: null,
+      hostnameValid: null,
+      timeValid: null,
+      valid: false,
+      failureCode: 'CONNECTION_FAILURE',
+    });
+    expect(tcp.reason).toMatch(/resolved in public DNS/i);
+    expect(tcp.reason).toMatch(/TCP connection/i);
+    expect(tcp.reason).not.toMatch(/does not resolve/i);
+
+    const handshake = toTelegraphResponse({
+      ...base,
+      handshakeSucceeded: false,
+      certificatePresent: false,
+      chainTrusted: null,
+      hostnameValid: null,
+      timeValid: null,
+      valid: false,
+      failureCode: 'HANDSHAKE_FAILURE',
+    });
+    expect(handshake.reason).toMatch(/reachable.*did not complete a TLS handshake/i);
+    expect(handshake.reason).not.toMatch(/does not resolve/i);
+  });
+
+  it('reports a blocked private destination without claiming a DNS failure', () => {
+    const blocked = toTelegraphResponse({
+      ...base,
+      input: '127.0.0.1',
+      normalizedHost: '127.0.0.1',
+      dnsResolved: false,
+      reachable: false,
+      handshakeSucceeded: false,
+      certificatePresent: false,
+      chainTrusted: null,
+      hostnameValid: null,
+      timeValid: null,
+      valid: false,
+      failureCode: 'CONNECTION_FAILURE',
+      failureMessage: 'unsafe destination address blocked: 127.0.0.1',
+      network: { resolvedAddresses: [] },
+    });
+    expect(blocked.reason).toMatch(/blocked by the network safety policy/i);
+    expect(blocked.checks_completed).toContain('destination safety policy');
+    expect(blocked.reason).not.toMatch(/does not resolve/i);
+  });
 });

@@ -34,12 +34,13 @@ const ENDPOINTS = {
   SSL_VERIFICATION: (q) =>
     `/ssl-check?domain=${encodeURIComponent(hostFrom(q) ?? 'api.example.com')}`,
   URL_SCAN: (q) =>
-    `/url-scan?question=${encodeURIComponent(q)}${urlFrom(q) ? `&url=${encodeURIComponent(urlFrom(q))}` : ''}`,
+    `/url-scan?question=${encodeURIComponent(q)}${explicitUrlFrom(q) ? `&url=${encodeURIComponent(explicitUrlFrom(q))}` : ''}`,
   GAS_PRICE: (q) =>
     `/gas-price?chain=${encodeURIComponent(requestedChainFrom(q) ?? 'ethereum')}` +
     `&question=${encodeURIComponent(q)}`,
   ONCHAIN_TX_LOOKUP: (q) =>
-    `/tx-lookup?chain=ethereum&hash=${encodeURIComponent(hashFrom(q) ?? '')}`,
+    `/tx-lookup?chain=${encodeURIComponent(namedChainFrom(q) ?? 'ethereum')}` +
+    `&hash=${encodeURIComponent(hashFrom(q) ?? '')}&question=${encodeURIComponent(q)}`,
   TVL_LOOKUP: (q) => {
     const chain = namedChainFrom(q);
     return (
@@ -60,8 +61,7 @@ const ENDPOINTS = {
 };
 
 const hostFrom = (q) => /\b((?:[a-z0-9-]+\.)+[a-z]{2,})\b/i.exec(q)?.[1] ?? null;
-const urlFrom = (q) =>
-  /https?:\/\/\S+/i.exec(q)?.[0] ?? (hostFrom(q) ? `https://${hostFrom(q)}/` : null);
+const explicitUrlFrom = (q) => /https?:\/\/\S+/i.exec(q)?.[0] ?? null;
 const hashFrom = (q) => /\b0x[0-9a-f]{64}\b/i.exec(q)?.[0] ?? null;
 const addressFrom = (q) => /\b0x[0-9a-fA-F]{40}\b/.exec(q)?.[0] ?? null;
 const ipFrom = (q) => /\b(?:\d{1,3}\.){3}\d{1,3}\b/.exec(q)?.[0] ?? null;
@@ -266,8 +266,13 @@ async function robust(receipts, champions, only) {
     const answers = new Map();
     for (const group of byPair.values()) {
       const { question, ground_truth: groundTruth } = group[0];
-      if (!answers.has(question)) answers.set(question, fetchAnswer(intent, question));
-      const answer = await answers.get(question);
+      // Different phrasings can resolve to the exact same live request (for
+      // example every SSL question currently probes api.example.com). Fetch
+      // that endpoint once, while still scoring its answer separately against
+      // every question-and-truth pair.
+      const answerKey = ENDPOINTS[intent]?.(question) ?? question;
+      if (!answers.has(answerKey)) answers.set(answerKey, fetchAnswer(intent, question));
+      const answer = await answers.get(answerKey);
       if (!answer) continue;
       let v;
       try {

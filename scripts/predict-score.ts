@@ -85,7 +85,12 @@ function cosine(a: string, b: string, idf: Map<string, number>): number {
 }
 
 /** BM25 of the answer against the ground truth, k1 = 1.2, b = 0.75. */
-function bm25(groundTruth: string, answer: string, idf: Map<string, number>, avgLen: number): number {
+function bm25(
+  groundTruth: string,
+  answer: string,
+  idf: Map<string, number>,
+  avgLen: number,
+): number {
   const q = tokenize(groundTruth);
   const d = termFreq(tokenize(answer));
   const dl = tokenize(answer).length;
@@ -122,7 +127,7 @@ function spearman(xs: number[], ys: number[]): number {
   const rank = (v: number[]): number[] => {
     const idx = v.map((value, i) => ({ value, i })).sort((a, b) => a.value - b.value);
     const out = new Array<number>(v.length);
-    for (let i = 0; i < idx.length; ) {
+    for (let i = 0; i < idx.length;) {
       let j = i;
       while (j + 1 < idx.length && idx[j + 1]!.value === idx[i]!.value) j += 1;
       const avg = (i + j) / 2 + 1;
@@ -173,14 +178,21 @@ function main(): void {
     console.log('-'.repeat(60));
     const all: Array<[number, number]> = [];
     for (const [intent, rows] of [...byIntent].sort()) {
-      const p = rows.map((r) => predict(r.question, r.ground_truth, r.converted_answer!, idf, avgLen));
+      const p = rows.map((r) =>
+        predict(r.question, r.ground_truth, r.converted_answer!, idf, avgLen),
+      );
       const a = rows.map((r) => r.score);
       for (let i = 0; i < p.length; i += 1) all.push([p[i]!, a[i]!]);
       const rho = spearman(p, a);
       const flag = Math.abs(rho) < 0.3 ? '   <-- weak, do not tune on this' : '';
-      console.log(`${intent.padEnd(24)} ${String(rows.length).padStart(4)}   ${rho.toFixed(4)}${flag}`);
+      console.log(
+        `${intent.padEnd(24)} ${String(rows.length).padStart(4)}   ${rho.toFixed(4)}${flag}`,
+      );
     }
-    const rho = spearman(all.map((t) => t[0]), all.map((t) => t[1]));
+    const rho = spearman(
+      all.map((t) => t[0]),
+      all.map((t) => t[1]),
+    );
     console.log('-'.repeat(60));
     console.log(`${'ALL'.padEnd(24)} ${String(all.length).padStart(4)}   ${rho.toFixed(4)}`);
     return;

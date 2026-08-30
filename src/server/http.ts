@@ -43,6 +43,53 @@ interface IntentRoute {
   handle(values: RequestValues, config: AppConfig): Promise<unknown>;
 }
 
+interface RequestFailureResponse {
+  verdict: 'not_found' | 'unavailable';
+  found: false;
+  confidence: number;
+  reason: string;
+  checked_at: string;
+  missing: string;
+}
+
+const REQUEST_SUBJECTS: Record<string, string> = {
+  '/ssl-check': 'TLS/SSL certificate verification',
+  '/v1/ssl-check': 'TLS/SSL certificate verification',
+  '/url-scan': 'URL safety assessment',
+  '/gas-price': 'gas-price lookup',
+  '/wallet-balance': 'wallet-balance lookup',
+  '/tx-lookup': 'transaction lookup',
+  '/crypto-price': 'cryptocurrency-price lookup',
+  '/tvl': 'total-value-locked lookup',
+  '/fx-rate': 'currency-exchange lookup',
+  '/ip-geolocation': 'IP-geolocation lookup',
+  '/stock-price': 'stock-price lookup',
+};
+
+function requestFailure(path: string, message: string, invalid: boolean): RequestFailureResponse {
+  const subject = REQUEST_SUBJECTS[path] ?? 'intent lookup';
+  const detail = message.replace(/[.!?]+$/, '');
+  return {
+    verdict: invalid ? 'not_found' : 'unavailable',
+    found: false,
+    confidence: 1,
+    checked_at: new Date().toISOString(),
+    missing: invalid ? 'valid request input' : 'a completed upstream result',
+    reason: invalid
+      ? `The ${subject} cannot be completed because the supplied request is invalid: ${detail}. ` +
+        'No result is returned rather than guessing the missing or malformed input.'
+      : `The ${subject} is temporarily unavailable because a required dependency failed before ` +
+        'a verified result was produced. No result is returned rather than inventing one.',
+  };
+}
+
+const MALFORMED_SENTINELS = new Set(['[object Object]', 'undefined', 'null', 'NaN', 'Infinity']);
+
+function containsOnlyMalformedSentinels(values: RequestValues): boolean {
+  const supplied = values.all().map((value) => value.trim());
+  return supplied.length > 0 && supplied.every((value) => MALFORMED_SENTINELS.has(value));
+}
+
 function tlsOptionsFrom(config: AppConfig): Partial<TLSVerificationOptions> {
   return {
     maxInputLength: config.maxInputLength,
@@ -324,6 +371,15 @@ export function createRequestHandler(config: AppConfig): RequestHandler {
         return;
       }
       if (!['GET', 'POST'].includes(method)) {
+        if (url.pathname in REQUEST_SUBJECTS) {
+          send(
+            response,
+            200,
+            requestFailure(url.pathname, `unsupported HTTP method ${method}`, true),
+            id,
+          );
+          return;
+        }
         send(response, 404, { error: 'not_found', code: 'NOT_FOUND', requestId: id }, id);
         return;
       }
@@ -332,7 +388,9 @@ export function createRequestHandler(config: AppConfig): RequestHandler {
       if (intentRoute) {
         const body = method === 'GET' ? undefined : await readBody(request);
         const values = method === 'GET' ? valuesFromQuery(url.searchParams) : valuesFromBody(body);
-        const payload = await intentRoute.handle(values, config);
+        const payload = containsOnlyMalformedSentinels(values)
+          ? requestFailure(url.pathname, 'the request contains only malformed runtime values', true)
+          : await intentRoute.handle(values, config);
         // The exact shape a caller used is the only way to tell a parsing
         // miss from a wrong answer, and the router decides that shape rather
         // than we do — so record it alongside what we resolved from it.
@@ -415,6 +473,10 @@ export function createRequestHandler(config: AppConfig): RequestHandler {
         },
         invalid ? 'info' : 'error',
       );
+      if (url.pathname in REQUEST_SUBJECTS) {
+        send(response, 200, requestFailure(url.pathname, message, invalid), id);
+        return;
+      }
       send(
         response,
         invalid ? 400 : 500,

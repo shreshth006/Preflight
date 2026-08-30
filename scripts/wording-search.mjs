@@ -8,6 +8,9 @@
  *   node scripts/wording-search.mjs TVL_LOOKUP
  *   node scripts/wording-search.mjs CRYPTO_PRICE
  *   node scripts/wording-search.mjs WALLET_BALANCE_CHECK
+ *   node scripts/wording-search.mjs URL_SCAN
+ *   node scripts/wording-search.mjs IP_GEOLOCATION
+ *   node scripts/wording-search.mjs SSL_VERIFICATION
  */
 
 import { readFileSync } from 'node:fs';
@@ -19,6 +22,10 @@ const intent = process.argv[2];
 
 const MODULES = {
   GAS_PRICE: 'fixtures/champions/GAS_PRICE_reg1535.wasm',
+  ONCHAIN_TX_LOOKUP: 'fixtures/champions/ONCHAIN_TX_LOOKUP_reg642.wasm',
+  URL_SCAN: 'fixtures/champions/URL_SCAN_reg220.wasm',
+  IP_GEOLOCATION: 'fixtures/champions/IP_GEOLOCATION_reg630.wasm',
+  SSL_VERIFICATION: 'fixtures/champions/SSL_VERIFICATION_reg631.wasm',
   TVL_LOOKUP: 'fixtures/champions/TVL_LOOKUP_reg49.wasm',
   CRYPTO_PRICE: 'fixtures/champions/CRYPTO_PRICE_reg222.wasm',
   WALLET_BALANCE_CHECK: 'fixtures/champions/WALLET_BALANCE_CHECK_reg1066.wasm',
@@ -45,6 +52,9 @@ const requestedChainFrom = (question) =>
 const addressFrom = (question) => /\b0x[0-9a-f]{40}\b/i.exec(question)?.[0] ?? '';
 const malformedAddressFrom = (question) => /\b0x[0-9a-f]{41,}\b/i.exec(question)?.[0] ?? '';
 const protocolFrom = (question) => /\b(aave\s*v?\d*)\b/i.exec(question)?.[1] ?? 'Aave V3';
+const hostFrom = (question) => /\b((?:[a-z0-9-]+\.)+[a-z]{2,})\b/i.exec(question)?.[1] ?? null;
+const urlFrom = (question) => /https?:\/\/\S+/i.exec(question)?.[0] ?? null;
+const ipFrom = (question) => /\b(?:\d{1,3}\.){3}\d{1,3}\b/.exec(question)?.[0] ?? '';
 
 function endpoint(question) {
   if (intent === 'GAS_PRICE') {
@@ -63,11 +73,165 @@ function endpoint(question) {
   if (intent === 'CRYPTO_PRICE') {
     return `/crypto-price?question=${encodeURIComponent(question)}`;
   }
+  if (intent === 'ONCHAIN_TX_LOOKUP') {
+    const hash = /\b0x[0-9a-f]{64}\b/i.exec(question)?.[0] ?? '';
+    return (
+      `/tx-lookup?chain=${encodeURIComponent(namedChainFrom(question) ?? 'ethereum')}` +
+      `&hash=${encodeURIComponent(hash)}&question=${encodeURIComponent(question)}`
+    );
+  }
+  if (intent === 'URL_SCAN') {
+    const url = urlFrom(question);
+    return (
+      `/url-scan?question=${encodeURIComponent(question)}` +
+      (url ? `&url=${encodeURIComponent(url)}` : '')
+    );
+  }
+  if (intent === 'IP_GEOLOCATION') {
+    return `/ip-geolocation?ip=${encodeURIComponent(ipFrom(question))}`;
+  }
+  if (intent === 'SSL_VERIFICATION') {
+    return `/ssl-check?domain=${encodeURIComponent(hostFrom(question) ?? 'api.example.com')}`;
+  }
   const chain = namedChainFrom(question) ?? 'ethereum';
   return (
     `/wallet-balance?chain=${encodeURIComponent(chain)}` +
     `&address=${encodeURIComponent(addressFrom(question))}&question=${encodeURIComponent(question)}`
   );
+}
+
+function urlCandidates(_question, body) {
+  const facts = Array.isArray(body.documented_facts) ? body.documented_facts : null;
+  if (!facts?.length) {
+    return Object.fromEntries(
+      ['current', 'first_two', 'first_fact', 'reverse', 'semicolon_list'].map((name) => [
+        name,
+        body.reason,
+      ]),
+    );
+  }
+  return {
+    current: body.reason,
+    first_two: facts.slice(0, 2).join(' '),
+    first_fact: facts[0],
+    reverse: [...facts].reverse().join(' '),
+    semicolon_list: facts.map((fact) => fact.replace(/\.$/, '')).join('; ') + '.',
+  };
+}
+
+function ipCandidates(_question, body) {
+  if (!body.found) {
+    const reserved = /RFC \d+ address registry/.test(body.source);
+    const conciseReserved = reserved
+      ? `The IP address ${body.ip} is reserved and is not routable on the public internet. It has ` +
+        'no geographic location, assigned ISP, autonomous system or public abuse history.'
+      : body.reason;
+    return {
+      current: body.reason,
+      concise: conciseReserved,
+      location_first: body.reason,
+      no_asn: body.reason,
+      no_abuse_scope: body.reason,
+    };
+  }
+  const operator = body.isp ?? body.organization ?? 'an unidentified network operator';
+  const place = [body.city, body.region, body.country].filter(Boolean).join(', ');
+  const network = body.asn ? ` It is announced in autonomous system ${body.asn}.` : '';
+  const abuse =
+    ' No abuse history is reported for this address by the geolocation and network registry ' +
+    'data consulted here, which does not include a reputation or abuse database.';
+  return {
+    current: body.reason,
+    concise:
+      `The IP address ${body.ip} is associated with ${operator} and is located in ${place}.` +
+      ' No abuse history is reported by the data consulted here.',
+    location_first:
+      `The IP address ${body.ip} is located in ${place} and is associated with ${operator}.` +
+      network +
+      abuse,
+    no_asn:
+      `The IP address ${body.ip} is associated with ${operator} and is located in ${place}.` +
+      abuse,
+    no_abuse_scope:
+      `The IP address ${body.ip} is associated with ${operator} and is located in ${place}.` +
+      network +
+      ' No abuse history is reported for this address.',
+  };
+}
+
+function sslCandidates(_question, body) {
+  const names = ['current', 'first_sentence', 'concise_unreachable', 'check_list'];
+  if (body.verdict !== 'unreachable') {
+    return Object.fromEntries(names.map((name) => [name, body.reason]));
+  }
+  const firstSentence = `${body.reason.split('. ')[0].replace(/\.$/, '')}.`;
+  return {
+    current: body.reason,
+    first_sentence: firstSentence,
+    concise_unreachable:
+      `The TLS/SSL certificate configuration for ${body.domain} cannot be analyzed because the ` +
+      'domain does not resolve to a server on the public internet and serves no certificate. ' +
+      'Certificate validity, expiration, issuer, hostname match, supported protocols, cipher ' +
+      'suites and chain trust therefore cannot be verified.',
+    check_list:
+      `The TLS/SSL certificate configuration for ${body.domain} cannot be analyzed because the ` +
+      'domain does not resolve to a server on the public internet and serves no certificate. ' +
+      'Checks blocked: certificate validity and expiration; issuer and chain trust; hostname and ' +
+      'Subject Alternative Name matching; TLS protocols; cipher suites; signature algorithm and ' +
+      'key strength.',
+  };
+}
+
+function onchainCandidates(question, body) {
+  if (!body.found || body.block_number === null) {
+    return Object.fromEntries(
+      ['current', 'question_lead', 'status_first', 'no_status'].map((name) => [name, body.reason]),
+    );
+  }
+  const recipient = body.contract_created ?? body.to ?? 'a contract creation with no recipient';
+  const amount = body.value_exact ?? body.value ?? '0';
+  const status =
+    body.status === 'success' ? 'ok' : body.status === 'failed' ? 'reverted' : body.status;
+  const call = body.method_selector
+    ? ` The call invoked function selector ${body.method_selector}.`
+    : body.contract_call === false
+      ? ' This was a simple ETH transfer, not a contract call.'
+      : '';
+  let questionLead = body.reason;
+  if (/\bsucceed\b/i.test(question)) {
+    questionLead =
+      `${body.status === 'success' ? 'Yes' : 'No'}, the transaction ` +
+      `${body.status === 'success' ? 'succeeded' : 'failed'} with recipient ${recipient}. ` +
+      `It carried ${amount} ${body.symbol} in native value and was sent from ${body.from} in ` +
+      `block ${body.block_number}.${call}`;
+  } else if (/\bcontract call\b/i.test(question)) {
+    questionLead =
+      `${body.contract_call ? 'Yes' : 'No'}, it was${body.contract_call ? '' : ' not'} a contract ` +
+      `call to ${recipient}. It carried ${amount} ${body.symbol} in native value and was sent ` +
+      `from ${body.from} in block ${body.block_number}.${call}`;
+  } else if (/\bsender address\b/i.test(question)) {
+    questionLead =
+      `The sender is ${body.from}, and it sent ${amount} ${body.symbol} to ${recipient} in block ` +
+      `${body.block_number}.${call}`;
+  } else if (/\bhow much|\btransferred\b/i.test(question)) {
+    questionLead =
+      `${amount} ${body.symbol} was transferred from ${body.from} to ${recipient} in block ` +
+      `${body.block_number} with status ${status}.${call}`;
+  } else if (/\bmethod\b/i.test(question) && body.method_selector) {
+    questionLead =
+      `The transaction invoked function selector ${body.method_selector} on contract ${recipient}, ` +
+      `sent from ${body.from} with ${amount} ${body.symbol} in native value, in block ` +
+      `${body.block_number}.`;
+  }
+  return {
+    current: body.reason,
+    question_lead: questionLead,
+    status_first:
+      `The transaction had status ${status}. The recipient was ${recipient}, it carried ${amount} ` +
+      `${body.symbol} in native value, and it was sent from ${body.from} in block ` +
+      `${body.block_number}.${call}`,
+    no_status: body.reason.replace(` with status ${status}`, ''),
+  };
 }
 
 function gasCandidates(question, body) {
@@ -284,10 +448,14 @@ const words = (iso) =>
 function cryptoCandidates(_question, body) {
   if (!body.found || body.price_usd === null || body.symbol === null) {
     return Object.fromEntries(
-      ['current', 'concise', 'direct_source', 'truth_open', 'no_approximately'].map((name) => [
-        name,
-        body.reason,
-      ]),
+      [
+        'current',
+        'period_accurate',
+        'concise',
+        'direct_source',
+        'truth_open',
+        'no_approximately',
+      ].map((name) => [name, body.reason]),
     );
   }
   const name = title(body.asset);
@@ -302,6 +470,12 @@ function cryptoCandidates(_question, body) {
         : '';
     return {
       current: body.reason,
+      period_accurate:
+        body.comparison_date &&
+        Math.abs(new Date(body.as_of_date).getTime() - new Date(body.comparison_date).getTime()) <
+          360 * 86_400_000
+          ? body.reason.replace('over the one-year period', 'over the period')
+          : body.reason,
       concise: primary + comparison,
       direct_source: `${primary}${comparison} The prices are from DefiLlama's aggregated USD feed.`,
       truth_open: primary + comparison,
@@ -326,6 +500,7 @@ function cryptoCandidates(_question, body) {
       : '';
   return {
     current: body.reason,
+    period_accurate: body.reason,
     concise: body.reason,
     truth_open: `The current price of ${asset} is approximately ${body.price_formatted} USD${list}.`,
     no_approximately: `The current price of ${asset} is ${body.price_formatted} USD${list}.`,
@@ -337,6 +512,10 @@ function cryptoCandidates(_question, body) {
 
 const candidateBuilder = {
   GAS_PRICE: gasCandidates,
+  ONCHAIN_TX_LOOKUP: onchainCandidates,
+  URL_SCAN: urlCandidates,
+  IP_GEOLOCATION: ipCandidates,
+  SSL_VERIFICATION: sslCandidates,
   TVL_LOOKUP: tvlCandidates,
   CRYPTO_PRICE: cryptoCandidates,
   WALLET_BALANCE_CHECK: walletCandidates,
@@ -358,7 +537,13 @@ for (const row of rows) {
 
 const questions = [...new Set(rows.map((row) => row.question))];
 const bodies = new Map();
-for (const question of questions) bodies.set(question, await fetchBody(question));
+const bodiesByEndpoint = new Map();
+for (const question of questions) {
+  const requestPath = endpoint(question);
+  if (!bodiesByEndpoint.has(requestPath))
+    bodiesByEndpoint.set(requestPath, await fetchBody(question));
+  bodies.set(question, bodiesByEndpoint.get(requestPath));
+}
 
 const mod = await loadScorer(MODULES[intent], intent);
 const results = new Map();

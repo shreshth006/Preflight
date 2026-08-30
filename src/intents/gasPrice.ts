@@ -1,4 +1,4 @@
-import { chainFromText, formatUnits, hexToBigInt, rpcCall, type ChainInfo } from '../chain/rpc.js';
+import { formatUnits, hexToBigInt, rpcCall, type ChainInfo } from '../chain/rpc.js';
 
 /** Native-token USD price, best effort: the fee in dollars is what the
  * answers that score state, and a missing quote simply omits that sentence. */
@@ -161,7 +161,9 @@ export async function getGasPrice(chain: ChainInfo, now = new Date()): Promise<G
   const transferNative = formatUnits(transferWei, chain.decimals, 8);
   const usd = await nativeUsdPrice(chain.symbol);
   const transferUsd =
-    usd === null ? null : (Number(transferNative) * usd).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+    usd === null
+      ? null
+      : (Number(transferNative) * usd).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
   const blockNumber = blockHex ? Number(hexToBigInt(blockHex)) : null;
 
   // What the question asks for: the fee an average transaction actually pays,
@@ -248,14 +250,4 @@ export async function getGasPrice(chain: ChainInfo, now = new Date()): Promise<G
     reason,
     checked_at: now.toISOString(),
   };
-}
-
-export function chainFromRequest(raw: string | undefined): ChainInfo {
-  if (!raw) return chainFromText('') ?? resolveDefault();
-  return chainFromText(raw) ?? resolveDefault();
-}
-
-function resolveDefault(): ChainInfo {
-  // Ethereum is the sensible default when a question names no chain.
-  return chainFromText('ethereum') as ChainInfo;
 }

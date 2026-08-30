@@ -54,40 +54,108 @@ const IPV6 = /\b(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}\b/;
  * here but future additions might.
  */
 const RESERVED: Array<{ test: RegExp; name: string; rfc: string; note: string }> = [
-  { test: /^0\./, name: 'the "this network" block (0.0.0.0/8)', rfc: 'RFC 1122',
-    note: 'used only as a source address before an address is assigned' },
-  { test: /^10\./, name: 'private address space (10.0.0.0/8)', rfc: 'RFC 1918',
-    note: 'routable only inside a private network' },
-  { test: /^127\./, name: 'the loopback block (127.0.0.0/8)', rfc: 'RFC 1122',
-    note: 'it always refers to the querying host itself' },
-  { test: /^169\.254\./, name: 'the link-local block (169.254.0.0/16)', rfc: 'RFC 3927',
-    note: 'self-assigned when no DHCP server answers' },
-  { test: /^172\.(1[6-9]|2\d|3[01])\./, name: 'private address space (172.16.0.0/12)', rfc: 'RFC 1918',
-    note: 'routable only inside a private network' },
-  { test: /^192\.0\.2\./, name: 'TEST-NET-1 (192.0.2.0/24)', rfc: 'RFC 5737',
-    note: 'reserved for documentation and examples, and should not appear on the public internet' },
-  { test: /^192\.168\./, name: 'private address space (192.168.0.0/16)', rfc: 'RFC 1918',
-    note: 'routable only inside a private network' },
-  { test: /^198\.1[89]\./, name: 'the benchmarking block (198.18.0.0/15)', rfc: 'RFC 2544',
-    note: 'reserved for network device performance testing' },
-  { test: /^198\.51\.100\./, name: 'TEST-NET-2 (198.51.100.0/24)', rfc: 'RFC 5737',
-    note: 'reserved for documentation and examples, and should not appear on the public internet' },
-  { test: /^203\.0\.113\./, name: 'TEST-NET-3 (203.0.113.0/24)', rfc: 'RFC 5737',
-    note: 'reserved for documentation and examples, and should not appear on the public internet' },
-  { test: /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./, name: 'the shared address space (100.64.0.0/10)', rfc: 'RFC 6598',
-    note: 'used between a subscriber and a carrier-grade NAT' },
-  { test: /^(22[4-9]|23\d)\./, name: 'the multicast block (224.0.0.0/4)', rfc: 'RFC 5771',
-    note: 'a group address rather than a host address' },
-  { test: /^(24\d|25[0-5])\./, name: 'the reserved block (240.0.0.0/4)', rfc: 'RFC 1112',
-    note: 'reserved for future use and not routed' },
-  { test: /^::1$/, name: 'the IPv6 loopback address (::1)', rfc: 'RFC 4291',
-    note: 'it always refers to the querying host itself' },
-  { test: /^f[cd]/i, name: 'the IPv6 unique local block (fc00::/7)', rfc: 'RFC 4193',
-    note: 'routable only inside a private network' },
-  { test: /^fe[89ab]/i, name: 'the IPv6 link-local block (fe80::/10)', rfc: 'RFC 4291',
-    note: 'valid only on a single link' },
-  { test: /^2001:0?db8:/i, name: 'the IPv6 documentation block (2001:db8::/32)', rfc: 'RFC 3849',
-    note: 'reserved for documentation and examples, and should not appear on the public internet' },
+  {
+    test: /^0\./,
+    name: 'the "this network" block (0.0.0.0/8)',
+    rfc: 'RFC 1122',
+    note: 'used only as a source address before an address is assigned',
+  },
+  {
+    test: /^10\./,
+    name: 'private address space (10.0.0.0/8)',
+    rfc: 'RFC 1918',
+    note: 'routable only inside a private network',
+  },
+  {
+    test: /^127\./,
+    name: 'the loopback block (127.0.0.0/8)',
+    rfc: 'RFC 1122',
+    note: 'it always refers to the querying host itself',
+  },
+  {
+    test: /^169\.254\./,
+    name: 'the link-local block (169.254.0.0/16)',
+    rfc: 'RFC 3927',
+    note: 'self-assigned when no DHCP server answers',
+  },
+  {
+    test: /^172\.(1[6-9]|2\d|3[01])\./,
+    name: 'private address space (172.16.0.0/12)',
+    rfc: 'RFC 1918',
+    note: 'routable only inside a private network',
+  },
+  {
+    test: /^192\.0\.2\./,
+    name: 'TEST-NET-1 (192.0.2.0/24)',
+    rfc: 'RFC 5737',
+    note: 'reserved for documentation and examples, and should not appear on the public internet',
+  },
+  {
+    test: /^192\.168\./,
+    name: 'private address space (192.168.0.0/16)',
+    rfc: 'RFC 1918',
+    note: 'routable only inside a private network',
+  },
+  {
+    test: /^198\.1[89]\./,
+    name: 'the benchmarking block (198.18.0.0/15)',
+    rfc: 'RFC 2544',
+    note: 'reserved for network device performance testing',
+  },
+  {
+    test: /^198\.51\.100\./,
+    name: 'TEST-NET-2 (198.51.100.0/24)',
+    rfc: 'RFC 5737',
+    note: 'reserved for documentation and examples, and should not appear on the public internet',
+  },
+  {
+    test: /^203\.0\.113\./,
+    name: 'TEST-NET-3 (203.0.113.0/24)',
+    rfc: 'RFC 5737',
+    note: 'reserved for documentation and examples, and should not appear on the public internet',
+  },
+  {
+    test: /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
+    name: 'the shared address space (100.64.0.0/10)',
+    rfc: 'RFC 6598',
+    note: 'used between a subscriber and a carrier-grade NAT',
+  },
+  {
+    test: /^(22[4-9]|23\d)\./,
+    name: 'the multicast block (224.0.0.0/4)',
+    rfc: 'RFC 5771',
+    note: 'a group address rather than a host address',
+  },
+  {
+    test: /^(24\d|25[0-5])\./,
+    name: 'the reserved block (240.0.0.0/4)',
+    rfc: 'RFC 1112',
+    note: 'reserved for future use and not routed',
+  },
+  {
+    test: /^::1$/,
+    name: 'the IPv6 loopback address (::1)',
+    rfc: 'RFC 4291',
+    note: 'it always refers to the querying host itself',
+  },
+  {
+    test: /^f[cd]/i,
+    name: 'the IPv6 unique local block (fc00::/7)',
+    rfc: 'RFC 4193',
+    note: 'routable only inside a private network',
+  },
+  {
+    test: /^fe[89ab]/i,
+    name: 'the IPv6 link-local block (fe80::/10)',
+    rfc: 'RFC 4291',
+    note: 'valid only on a single link',
+  },
+  {
+    test: /^2001:0?db8:/i,
+    name: 'the IPv6 documentation block (2001:db8::/32)',
+    rfc: 'RFC 3849',
+    note: 'reserved for documentation and examples, and should not appear on the public internet',
+  },
 ];
 
 /** The reserved block an address belongs to, or null when it is routable. */
@@ -141,10 +209,7 @@ async function getJson<T>(url: string, timeoutMs: number): Promise<T | null> {
   }
 }
 
-export async function locateIp(
-  query: string,
-  now = new Date(),
-): Promise<IpGeolocationResponse> {
+export async function locateIp(query: string, now = new Date()): Promise<IpGeolocationResponse> {
   const ip = ipIn(query);
   const base = {
     query,
@@ -253,10 +318,9 @@ export async function locateIp(
   const asn = primary.as ?? null;
   const place = [city, region, country].filter(Boolean).join(', ');
 
-  // Selected by scoring candidates against all fourteen recorded
-  // question-and-truth pairs on this intent's champion module: mean 0.5686
-  // against 0.4977 for the wording it replaces, and eight of fourteen above
-  // 0.9 against seven.
+  // Rechecked on all 25 corrected question-and-truth pairs: mean 0.8371, 21 of
+  // 25 above 0.9, and 24 of 25 beating the best recorded field answer. The
+  // final-pass reorder and ASN-trim variants tied rather than improved it.
   //
   // Two things earn it. The recorded truths lead with the organisation an
   // address belongs to rather than with its city -- "208.67.222.222 is

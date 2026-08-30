@@ -73,6 +73,15 @@ export const CHAINS: Record<string, ChainInfo> = {
     rpcUrls: ['https://polygon-bor-rpc.publicnode.com', 'https://polygon.drpc.org'],
     explorer: 'https://polygonscan.com',
   },
+  sepolia: {
+    key: 'sepolia',
+    name: 'Ethereum Sepolia',
+    chainId: 11_155_111,
+    symbol: 'ETH',
+    decimals: 18,
+    rpcUrls: ['https://ethereum-sepolia-rpc.publicnode.com', 'https://rpc.sepolia.org'],
+    explorer: 'https://sepolia.etherscan.io',
+  },
   'base-sepolia': {
     key: 'base-sepolia',
     name: 'Base Sepolia',
@@ -98,7 +107,7 @@ const CHAIN_ALIASES: Record<string, string> = {
   'op-mainnet': 'optimism',
   matic: 'polygon',
   'polygon-pos': 'polygon',
-  sepolia: 'base-sepolia',
+  'ethereum-sepolia': 'sepolia',
   basesepolia: 'base-sepolia',
 };
 

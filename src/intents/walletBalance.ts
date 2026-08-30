@@ -116,6 +116,7 @@ export async function getWalletBalance(
       ethereum: 'Ethereum mainnet',
       base: 'the Base chain',
       arbitrum: 'Arbitrum',
+      sepolia: 'the Sepolia testnet',
       'base-sepolia': 'the Sepolia testnet',
     }[chain.key] ?? chain.name;
   const rpcNetwork =
@@ -123,6 +124,7 @@ export async function getWalletBalance(
       ethereum: 'Ethereum',
       base: 'Base',
       arbitrum: 'Arbitrum',
+      sepolia: 'Sepolia',
       'base-sepolia': 'Sepolia',
     }[chain.key] ?? chain.name;
   // This is the measured truth shape across all 16 recorded pairs: address,

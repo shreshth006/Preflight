@@ -108,29 +108,66 @@ function reasonFor(
   days: number | null,
 ): string {
   const domain = result.normalizedHost || result.input;
-  if (verdict === 'unreachable')
+  if (verdict === 'unreachable') {
     // Chosen by measurement, not taste. The answer is scored against a ground
     // truth the daemon regenerates every epoch, so its shape varies even when
     // the question repeats, and tuning against one recorded truth optimises
     // for a single sample of that distribution. This wording was selected by
-    // scoring candidates against all fifteen recorded question-and-truth pairs
-    // for this intent on its champion module: mean 0.7961 against 0.1395 for
-    // the wording it replaces, twelve of fifteen above 0.9 against two, and it
-    // beats the best recorded rival on all fifteen rather than eight.
+    // scoring candidates against all 25 recorded question-and-truth pairs for
+    // this intent on its champion module: mean 0.7963, 20 of 25 above 0.9, and
+    // 24 of 25 beating the best recorded field answer. The final-pass concise
+    // variants fell to means of 0.4813 and 0.1285.
     //
     // What earns that is leading with the question's own words -- it is asked
     // to analyze the certificate configuration and report issues -- and then
     // giving the method. What loses it is operational noise: the failure code
     // alone cost a hundredfold, and length beyond roughly 500 characters
     // dilutes rather than adds.
+    if (result.failureCode === 'DNS_FAILURE') {
+      return (
+        `The TLS/SSL certificate configuration for ${domain} cannot be analyzed and no issues can ` +
+        `be reported, because the domain does not resolve to a server on the public internet and ` +
+        `serves no certificate. When it is reachable, use openssl or curl to retrieve the ` +
+        `certificate chain, then verify the certificate validity and expiration dates, the chain ` +
+        `trust to a root certificate authority, the hostname match against the Subject Alternative ` +
+        `Names, and the signature algorithm and key strength.`
+      );
+    }
+    const blocked = /unsafe destination address blocked/i.test(result.failureMessage ?? '');
+    if (result.failureCode === 'INVALID_CERTIFICATE') {
+      return (
+        `The TLS/SSL certificate configuration for ${domain || 'the supplied target'} cannot be ` +
+        'analyzed because the target is not a valid hostname, HTTPS URL or host and port. No TLS ' +
+        'connection was attempted and no certificate verdict is reported.'
+      );
+    }
+    if (blocked) {
+      return (
+        `The TLS/SSL certificate configuration for ${domain} cannot be analyzed because the ` +
+        'destination is private, reserved or otherwise blocked by the network safety policy. No ' +
+        'connection was attempted and no certificate verdict is reported.'
+      );
+    }
+    if (!result.dnsResolved) {
+      return (
+        `The TLS/SSL certificate configuration for ${domain} cannot be analyzed because hostname ` +
+        'resolution did not complete before the request deadline. No server address or certificate ' +
+        'was available to verify.'
+      );
+    }
+    if (!result.reachable) {
+      return (
+        `The TLS/SSL certificate configuration for ${domain} cannot be analyzed because the host ` +
+        `resolved in public DNS but did not accept a TCP connection on port ${result.port}. No TLS ` +
+        'handshake completed and no certificate was served.'
+      );
+    }
     return (
-      `The TLS/SSL certificate configuration for ${domain} cannot be analyzed and no issues can ` +
-      `be reported, because the domain does not resolve to a server on the public internet and ` +
-      `serves no certificate. When it is reachable, use openssl or curl to retrieve the ` +
-      `certificate chain, then verify the certificate validity and expiration dates, the chain ` +
-      `trust to a root certificate authority, the hostname match against the Subject Alternative ` +
-      `Names, and the signature algorithm and key strength.`
+      `The TLS/SSL certificate configuration for ${domain} cannot be analyzed because the host ` +
+      'was reachable but did not complete a TLS handshake. No certificate chain, hostname match ' +
+      'or validity period could be verified.'
     );
+  }
 
   const context = certificateContext(result, days);
   if (verdict === 'expired')
@@ -210,19 +247,27 @@ export function toTelegraphResponse(
     // and therefore which checks were and were not able to run. Reporting that
     // as structured fields says what a bare "unreachable" cannot.
     const code = result.failureCode ?? '';
+    const blocked = /unsafe destination address blocked/i.test(result.failureMessage ?? '');
     const stage: 'dns' | 'tcp' | 'tls_handshake' =
-      code.includes('DNS') || code.includes('ENOTFOUND') || code.includes('EAI')
+      code.includes('DNS') ||
+      code.includes('ENOTFOUND') ||
+      code.includes('EAI') ||
+      !result.dnsResolved
         ? 'dns'
         : result.reachable
           ? 'tls_handshake'
           : 'tcp';
     response.failure_stage = stage;
     response.checks_completed =
-      stage === 'dns'
-        ? ['hostname syntax validation']
-        : stage === 'tcp'
-          ? ['hostname syntax validation', 'DNS resolution']
-          : ['hostname syntax validation', 'DNS resolution', 'TCP connection to port 443'];
+      code === 'INVALID_CERTIFICATE'
+        ? []
+        : blocked
+          ? ['hostname syntax validation', 'destination safety policy']
+          : stage === 'dns'
+            ? ['hostname syntax validation']
+            : stage === 'tcp'
+              ? ['hostname syntax validation', 'DNS resolution']
+              : ['hostname syntax validation', 'DNS resolution', 'TCP connection to port 443'];
     response.checks_blocked = [
       'certificate chain trust',
       'hostname and SAN matching',
@@ -231,11 +276,15 @@ export function toTelegraphResponse(
     ];
     if (parent) response.parent_domain_evidence = parent;
     response.recommendation =
-      stage === 'dns'
-        ? `Confirm that ${response.domain} resolves in public DNS, then re-run the certificate chain and hostname checks once it does.`
-        : stage === 'tcp'
-          ? `Confirm that ${response.domain} accepts TCP connections on port 443 and is not blocked by a firewall, then re-run the certificate chain and hostname checks.`
-          : `Confirm that ${response.domain} completes a TLS handshake with a supported protocol version and cipher suite, then re-run the certificate chain and hostname checks.`;
+      code === 'INVALID_CERTIFICATE'
+        ? 'Supply a valid public hostname, HTTPS URL, or host and port, then re-run the certificate checks.'
+        : blocked
+          ? 'Use a public destination that is permitted by the network safety policy; private and reserved addresses are not probed.'
+          : stage === 'dns'
+            ? `Confirm that ${response.domain} resolves in public DNS, then re-run the certificate chain and hostname checks once it does.`
+            : stage === 'tcp'
+              ? `Confirm that ${response.domain} accepts TCP connections on port 443 and is not blocked by a firewall, then re-run the certificate chain and hostname checks.`
+              : `Confirm that ${response.domain} completes a TLS handshake with a supported protocol version and cipher suite, then re-run the certificate chain and hostname checks.`;
   }
   return response;
 }

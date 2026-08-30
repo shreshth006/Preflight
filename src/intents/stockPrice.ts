@@ -46,8 +46,26 @@ const NAMES: Record<string, string> = {
 };
 
 const STOPWORDS = new Set([
-  'THE', 'AND', 'FOR', 'WAS', 'ARE', 'USD', 'ITS', 'HOW', 'WHY', 'WHO', 'DID',
-  'HAS', 'NOW', 'ALL', 'ANY', 'CAN', 'YOU', 'NOT', 'BUT', 'PER',
+  'THE',
+  'AND',
+  'FOR',
+  'WAS',
+  'ARE',
+  'USD',
+  'ITS',
+  'HOW',
+  'WHY',
+  'WHO',
+  'DID',
+  'HAS',
+  'NOW',
+  'ALL',
+  'ANY',
+  'CAN',
+  'YOU',
+  'NOT',
+  'BUT',
+  'PER',
 ]);
 
 export interface StockPriceResponse {
@@ -105,10 +123,7 @@ interface YahooMeta {
   marketState?: string;
 }
 
-export async function getStockPrice(
-  query: string,
-  now = new Date(),
-): Promise<StockPriceResponse> {
+export async function getStockPrice(query: string, now = new Date()): Promise<StockPriceResponse> {
   const symbol = tickerFrom(query);
   const base = {
     query,

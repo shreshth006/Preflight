@@ -50,16 +50,18 @@ So always measure with `--robust`, which scores against **every** recorded
 question-and-truth pair, and select on **mean** and **beats-field**, never on
 the best case.
 
-Worked example — SSL wording selection:
+Worked example — SSL wording selection on the corrected 25-pair corpus:
 
 ```
                           mean     >0.9     beats field
-chosen wording           0.7961   12/15        15/15
-previous wording         0.1395    2/15         8/15
+chosen wording           0.7963   20/25        24/25
+check-list variant       0.7175   18/25        24/25
+concise variant          0.4813   12/25        21/25
+first sentence only      0.1285    3/25        22/25
 ```
 
-The previous wording scored **0.994 on the latest truth** and was still far
-worse overall.
+Shorter was not better here. The full answer retained more truth shapes and
+more field wins, so it stayed unchanged.
 
 ---
 
@@ -108,13 +110,15 @@ Ground truths use **noun-phrase lists**. Verb-led separate sentences score zero.
 A 400 is correct as an API and wrong as a miner: the node scores the prose it
 receives, and a status code gives it none.
 
-Epoch 292, WALLET_BALANCE_CHECK was asked *"What is the current native coin
-balance of wallet address on the Base chain?"* — a question naming no address.
+Epoch 292, WALLET_BALANCE_CHECK was asked _"What is the current native coin
+balance of wallet address on the Base chain?"_ — a question naming no address.
 We returned 400 and scored 0. So did `chainwire`. The miner that simply
 answered took the intent with 0.0019.
 
-Every missing-parameter path now returns 200 with prose explaining what is
-missing. See `src/telegraph/unanswerable.ts`.
+Every intent path now returns 200 with prose for missing input, garbage query
+input, malformed JSON, unsupported methods, unsupported chains and dependency
+failures. The 10-endpoint integration matrix covers these branches. Unknown
+non-intent routes still return the conventional 404.
 
 Same class of bug: a malformed address. The recurring question carries
 `%[0x1234567890abcdef1234567890abcdef123456789]%` — 41 hex chars where an
@@ -123,15 +127,15 @@ rejecting it.
 
 ### 3.5 Answer the question that was asked
 
-- GAS_PRICE asks for the *average transaction fee in USD*. A 21,000-gas
-  transfer is the **cheapest possible** transaction; the measured average is
-  139,445 gas — nearly 7x higher.
-- ONCHAIN questions are often yes/no. The truth opens *"Yes, both the sender
-  and recipient are 0x…"*. Lead with the answer, not the transaction hash —
+- GAS_PRICE asks for the _average transaction fee in USD_. A 21,000-gas
+  transfer is the **cheapest possible** transaction, not the average of recent
+  blocks.
+- ONCHAIN questions are often yes/no. The truth opens _"Yes, both the sender
+  and recipient are 0x…"_. Lead with the answer, not the transaction hash —
   **no truth ever repeats the hash**.
 - SSL questions target `api.example.com`, which never resolves. The truths
-  answer as **method**: *"use openssl or curl, here are the steps and the
-  issues to look for."* Give the methodology, not an apology.
+  answer as **method**: _"use openssl or curl, here are the steps and the
+  issues to look for."_ Give the methodology, not an apology.
 - URL_SCAN is a **knowledge** intent — "what is documented about X" — not a
   live scanner. See `src/intents/threatIntel.ts`.
 - Use the exact figures and date formats the truths use: full-precision values
@@ -149,14 +153,15 @@ fixtures/live/scored-receipts.json   1,056 receipts: question, ground truth,
 fixtures/champions/*.wasm            the 10 scoring binaries
 scripts/epoch-replica.mjs            --verify | --rank | --robust
 scripts/predict-score.ts             TF-IDF proxy; weaker, superseded
-scripts/smoke.sh                     19 production checks + prose defects
+scripts/smoke.sh                     21 production checks + prose defects
 scripts/inspect-scoring.sh           live epoch standings
 scripts/sync-miner.sh                on-chain manifest publish (pre-authorized)
 ```
 
 `smoke.sh` checks prose well-formedness (unrendered `${}`, `undefined`, comma
 after period, unterminated sentences) because a half-applied edit once shipped
-`"...price sources., a 24-hour price increase"` and all 19 checks passed it.
+`"...price sources., a 24-hour price increase"` and all earlier checks passed
+it before prose validation was added.
 
 ---
 
@@ -166,7 +171,7 @@ Two sequential gates against the incumbent champion:
 
 1. **Ordering** — rank the good answer above the bad one on at least as many
    of ~15 hidden fixtures as the champion
-2. **Separation** — average margin must *exceed* the champion's, not tie
+2. **Separation** — average margin must _exceed_ the champion's, not tie
 
 The rejection message names which gate failed and gives both numbers. That is
 your only view into the hidden fixtures — read it carefully.
@@ -213,6 +218,13 @@ already pass one gate, do not spend it to pass the other.**
    under that treatment.
 5. **Half-applied edits.** Always re-read the file after a scripted edit and
    check the rendered output, not just that it compiles.
+6. **Grouping robust replay by question alone.** One question can have multiple
+   regenerated truths. The old harness silently scored only the first. Robust
+   replay is now keyed by `(question, ground_truth)`.
+7. **Inventing replay parameters.** The old TVL replica forced Ethereum onto
+   all-chain questions; URL replay likewise synthesized a live URL from a bare
+   incident hostname. Reconstruct only what the question and router actually
+   supply.
 
 ---
 
@@ -229,6 +241,26 @@ GAS PRICE          #7     0.000      WALLET BALANCE    #7   0.000  (transport)
 Track 2: champion of TEXT_AUTHENTICITY_CHECK (reg 1832).
 ```
 
+Fresh corrected-corpus robust snapshot on August 30, 2026:
+
+```
+intent                   pairs   mean     min      >0.9    beats-field
+CRYPTO_PRICE                28   0.0412   0.0000    0/28      14/28
+GAS_PRICE                   28   0.0049   0.0000    0/28       6/28
+IP_GEOLOCATION              25   0.8371   0.0096   21/25      24/25
+ONCHAIN_TX_LOOKUP            9   0.8883   0.0138    8/9        8/9
+SSL_VERIFICATION            25   0.7963   0.0093   20/25      24/25
+TVL_LOOKUP                  29   0.0202   0.0068    0/29      17/29
+URL_SCAN                    10   0.7698   0.0000    6/10       9/10
+WALLET_BALANCE_CHECK        16   0.2488   0.0001    4/16       9/16
+CURRENCY_EXCHANGE            0   —        —         —          —
+STOCK_PRICE                  0   —        —         —          —
+```
+
+The last two have no archived question/ground-truth receipts and therefore
+cannot be tuned offline. The epoch standings above are observable, but no
+robust before/after can be produced for their wording.
+
 Judging is **the average of normalized performance across intents**, per the
 maintainers. Normalized is score ÷ leader, so **rank matters and absolute score
 does not**: winning an intent where everyone scores 0.02 is worth exactly as
@@ -243,11 +275,18 @@ intent you are winning.
   `dial tcp: lookup …vercel.app: i/o timeout` on the node's side, while the
   endpoint served in 0.44s with 2ms DNS. A third of the surface scored zero for
   reasons unrelated to answers. Maintainers are aware.
-- **TVL_LOOKUP resists tuning.** Six wordings, all mean 0.0200, nothing above
-  0.9 on any of 22 pairs. All-time ceiling by anyone is 0.1303.
-- **GAS_PRICE** is led by a miner that answers *"no admissible evidence found"*
+- **TVL_LOOKUP is not proven structurally capped.** The earlier conclusion used
+  both broken replay grouping and a forced Ethereum scope. On the corrected 29
+  pairs, the baseline is mean 0.0202 and 17/29 field wins. The best final-pass
+  wording reached 0.0211 but stayed at 17/29, so it failed the two-metric gate
+  and was rejected. Re-test future candidates; do not repeat the capped claim.
+- **GAS_PRICE** is led by a miner that answers _"no admissible evidence found"_
   and scores ~1.0 whenever the truth generator also fails. Deliberately not
   imitated — it returns nothing to real users.
 - **Fresh truth shapes.** The replica measures recorded shapes. Epoch 292's
   ONCHAIN truth fell outside all of them and the whole field scored ~0.01. This
   is irreducible while truths are generated.
+- **No offline evidence for CURRENCY_EXCHANGE or STOCK_PRICE.** Both have zero
+  archived truth pairs. Do not tune their prose unless new ground truths become
+  available; only fix defects independently provable from HTTP or factual
+  behavior.
