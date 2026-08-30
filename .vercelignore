@@ -12,3 +12,11 @@ core
 core.*
 *.core
 .git
+
+# Local user tools and archived artifacts; never part of the miner deployment.
+Mel-linux-x86_64.tar.gz
+mel
+mel.desktop
+install.sh
+icons/
+fixtures/champions/CRYPTO_PRICE_reg1952.wasm

@@ -69,6 +69,10 @@
     {
       "source": "/stock-price",
       "destination": "/api/index"
+    },
+    {
+      "source": "/papers",
+      "destination": "/api/index"
     }
   ]
 }
