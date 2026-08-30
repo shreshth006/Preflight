@@ -96,6 +96,14 @@ describe('HTTP miner', () => {
 });
 
 describe('a question missing its parameter is answered, not refused', () => {
+  it('answers an unsupported gas network with prose', async () => {
+    const { status, body } = await get('/gas-price?chain=solana');
+    expect(status).toBe(200);
+    expect(body.verdict).toBe('not_found');
+    expect(String(body.reason)).toMatch(/Solana|solana/);
+    expect(String(body.reason).length).toBeGreaterThan(80);
+  });
+
   it('answers a balance question that names no address', async () => {
     // Epoch 292 asked "What is the current native coin balance of wallet
     // address on the Base chain?" -- no address in it. We returned HTTP 400

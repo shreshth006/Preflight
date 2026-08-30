@@ -18,6 +18,7 @@ const RECEIPTS = 'fixtures/live/scored-receipts.json';
 const intent = process.argv[2];
 
 const MODULES = {
+  GAS_PRICE: 'fixtures/champions/GAS_PRICE_reg1535.wasm',
   TVL_LOOKUP: 'fixtures/champions/TVL_LOOKUP_reg49.wasm',
   CRYPTO_PRICE: 'fixtures/champions/CRYPTO_PRICE_reg222.wasm',
   WALLET_BALANCE_CHECK: 'fixtures/champions/WALLET_BALANCE_CHECK_reg1066.wasm',
@@ -37,11 +38,21 @@ const title = (value) =>
 const namedChainFrom = (question) =>
   /\b(arbitrum|base|optimism|polygon|sepolia|ethereum)\b/i.exec(question)?.[1]?.toLowerCase() ??
   null;
+const requestedChainFrom = (question) =>
+  /\b(arbitrum|base|bitcoin|optimism|polygon|sepolia|solana|ethereum)\b/i
+    .exec(question)?.[1]
+    ?.toLowerCase() ?? null;
 const addressFrom = (question) => /\b0x[0-9a-f]{40}\b/i.exec(question)?.[0] ?? '';
 const malformedAddressFrom = (question) => /\b0x[0-9a-f]{41,}\b/i.exec(question)?.[0] ?? '';
 const protocolFrom = (question) => /\b(aave\s*v?\d*)\b/i.exec(question)?.[1] ?? 'Aave V3';
 
 function endpoint(question) {
+  if (intent === 'GAS_PRICE') {
+    return (
+      `/gas-price?chain=${encodeURIComponent(requestedChainFrom(question) ?? 'ethereum')}` +
+      `&question=${encodeURIComponent(question)}`
+    );
+  }
   if (intent === 'TVL_LOOKUP') {
     const chain = namedChainFrom(question);
     return (
@@ -57,6 +68,38 @@ function endpoint(question) {
     `/wallet-balance?chain=${encodeURIComponent(chain)}` +
     `&address=${encodeURIComponent(addressFrom(question))}&question=${encodeURIComponent(question)}`
   );
+}
+
+function gasCandidates(question, body) {
+  if (!('gas_price_gwei' in body)) {
+    return Object.fromEntries(
+      ['current', 'average_lead', 'concise', 'gwei_lead'].map((name) => [name, body.reason]),
+    );
+  }
+  const chain = title(body.chain);
+  const date = datePhrase(question);
+  const asOf = date ? ` as of ${date}` : '';
+  const average =
+    body.average_fee_native === null
+      ? null
+      : `${body.average_fee_native} ${body.symbol}` +
+        (body.average_fee_usd === null ? '' : `, approximately $${body.average_fee_usd} USD`);
+  return {
+    current: body.reason,
+    average_lead:
+      average === null
+        ? body.reason
+        : `The current average transaction fee on ${chain}${asOf} is ${average}, based on ` +
+          `${body.average_gas_per_tx} gas per transaction at a gas price of ` +
+          `${body.gas_price_gwei} gwei.`,
+    concise:
+      average === null
+        ? body.reason
+        : `The current average transaction fee on ${chain}${asOf} is ${average}.`,
+    gwei_lead:
+      `The current gas price on ${chain}${asOf} is ${body.gas_price_gwei} gwei, a ` +
+      `${body.level} transaction fee level.`,
+  };
 }
 
 async function fetchBody(question) {
@@ -293,6 +336,7 @@ function cryptoCandidates(_question, body) {
 }
 
 const candidateBuilder = {
+  GAS_PRICE: gasCandidates,
   TVL_LOOKUP: tvlCandidates,
   CRYPTO_PRICE: cryptoCandidates,
   WALLET_BALANCE_CHECK: walletCandidates,

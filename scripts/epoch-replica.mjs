@@ -31,10 +31,15 @@ const BASE = process.env.PREFLIGHT_BASE ?? 'https://preflight-ssl-verification.v
 
 /** Live endpoint that answers each intent, and a probe for the recorded question. */
 const ENDPOINTS = {
-  SSL_VERIFICATION: (q) => `/ssl-check?domain=${encodeURIComponent(hostFrom(q) ?? 'api.example.com')}`,
-  URL_SCAN: (q) => `/url-scan?question=${encodeURIComponent(q)}${urlFrom(q) ? `&url=${encodeURIComponent(urlFrom(q))}` : ''}`,
-  GAS_PRICE: () => `/gas-price?chain=ethereum`,
-  ONCHAIN_TX_LOOKUP: (q) => `/tx-lookup?chain=ethereum&hash=${encodeURIComponent(hashFrom(q) ?? '')}`,
+  SSL_VERIFICATION: (q) =>
+    `/ssl-check?domain=${encodeURIComponent(hostFrom(q) ?? 'api.example.com')}`,
+  URL_SCAN: (q) =>
+    `/url-scan?question=${encodeURIComponent(q)}${urlFrom(q) ? `&url=${encodeURIComponent(urlFrom(q))}` : ''}`,
+  GAS_PRICE: (q) =>
+    `/gas-price?chain=${encodeURIComponent(requestedChainFrom(q) ?? 'ethereum')}` +
+    `&question=${encodeURIComponent(q)}`,
+  ONCHAIN_TX_LOOKUP: (q) =>
+    `/tx-lookup?chain=ethereum&hash=${encodeURIComponent(hashFrom(q) ?? '')}`,
   TVL_LOOKUP: (q) => {
     const chain = namedChainFrom(q);
     return (
@@ -55,12 +60,17 @@ const ENDPOINTS = {
 };
 
 const hostFrom = (q) => /\b((?:[a-z0-9-]+\.)+[a-z]{2,})\b/i.exec(q)?.[1] ?? null;
-const urlFrom = (q) => /https?:\/\/\S+/i.exec(q)?.[0] ?? (hostFrom(q) ? `https://${hostFrom(q)}/` : null);
+const urlFrom = (q) =>
+  /https?:\/\/\S+/i.exec(q)?.[0] ?? (hostFrom(q) ? `https://${hostFrom(q)}/` : null);
 const hashFrom = (q) => /\b0x[0-9a-f]{64}\b/i.exec(q)?.[0] ?? null;
 const addressFrom = (q) => /\b0x[0-9a-fA-F]{40}\b/.exec(q)?.[0] ?? null;
 const ipFrom = (q) => /\b(?:\d{1,3}\.){3}\d{1,3}\b/.exec(q)?.[0] ?? null;
 const namedChainFrom = (q) =>
   /\b(arbitrum|base|optimism|polygon|sepolia|ethereum)\b/i.exec(q)?.[1]?.toLowerCase() ?? null;
+const requestedChainFrom = (q) =>
+  /\b(arbitrum|base|bitcoin|optimism|polygon|sepolia|solana|ethereum)\b/i
+    .exec(q)?.[1]
+    ?.toLowerCase() ?? null;
 const chainFrom = (q) => namedChainFrom(q) ?? 'ethereum';
 const protocolFrom = (q) => /\b(aave\s*v?\d*)\b/i.exec(q)?.[1] ?? 'Aave V3';
 
@@ -82,7 +92,7 @@ function spearman(xs, ys) {
   const rank = (v) => {
     const idx = v.map((value, i) => ({ value, i })).sort((a, b) => a.value - b.value);
     const out = new Array(v.length);
-    for (let i = 0; i < idx.length; ) {
+    for (let i = 0; i < idx.length;) {
       let j = i;
       while (j + 1 < idx.length && idx[j + 1].value === idx[i].value) j += 1;
       const avg = (i + j) / 2 + 1;
@@ -136,12 +146,17 @@ async function verify(receipts, champions, only) {
     }
     const rho = predicted.length > 2 ? spearman(predicted, actual) : 0;
     const note = rho >= 0.9 ? 'faithful' : rho >= 0.6 ? 'usable' : 'WEAK — do not tune on this';
-    console.log(`${intent.padEnd(24)} ${String(predicted.length).padStart(4)}   ${rho.toFixed(4)}     ${note}`);
+    console.log(
+      `${intent.padEnd(24)} ${String(predicted.length).padStart(4)}   ${rho.toFixed(4)}     ${note}`,
+    );
   }
   if (overall.length > 2) {
     console.log('-'.repeat(72));
     console.log(
-      `${'ALL'.padEnd(24)} ${String(overall.length).padStart(4)}   ${spearman(overall.map((t) => t[0]), overall.map((t) => t[1])).toFixed(4)}`,
+      `${'ALL'.padEnd(24)} ${String(overall.length).padStart(4)}   ${spearman(
+        overall.map((t) => t[0]),
+        overall.map((t) => t[1]),
+      ).toFixed(4)}`,
     );
   }
 }
@@ -186,7 +201,10 @@ async function rank(receipts, champions, only) {
     const mod = await loadScorer(path, intent);
     const mine = mod.score(latest.question, latest.ground_truth, answer);
     const rivals = field
-      .map((r) => ({ miner: r.miner, score: mod.score(r.question, r.ground_truth, r.converted_answer) }))
+      .map((r) => ({
+        miner: r.miner,
+        score: mod.score(r.question, r.ground_truth, r.converted_answer),
+      }))
       .filter((r) => Number.isFinite(r.score) && !r.miner.includes('preflight'))
       .sort((a, b) => b.score - a.score);
     const best = rivals[0];

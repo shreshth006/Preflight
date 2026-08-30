@@ -72,6 +72,14 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
   '/gas-price': {
     intent: 'GAS_PRICE',
     handle: async (values) => {
+      const named = findChain(values);
+      if (named && !lookupChain(named)) {
+        return unanswerable(
+          `An average transaction fee on ${named}`,
+          'a supported EVM network',
+          `PREFLIGHT measures transaction fees on ${SUPPORTED_CHAINS}.`,
+        );
+      }
       return getGasPrice(chainFor(values));
     },
   },
