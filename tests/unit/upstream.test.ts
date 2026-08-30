@@ -58,6 +58,47 @@ describe('upstream failure is not evidence of absence', () => {
     expect(r.reason).toMatch(/not substituted/i);
   });
 
+  it('uses the measured all-chain TVL shape and the question calendar date', async () => {
+    vi.stubGlobal('fetch', (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('/tvl/aave')) return Promise.resolve(new Response('1000000000'));
+      if (url.endsWith('/v2/chains')) return Promise.resolve(new Response('[]'));
+      return Promise.reject(new Error(`unexpected URL: ${url}`));
+    });
+    const r = await lookupTvl(
+      'aave',
+      new Date('2026-08-30T00:00:00.000Z'),
+      undefined,
+      'What is the TVL in Aave as of August 29, 2026?',
+    );
+    expect(r.reason).toBe(
+      "The current total value locked (TVL) in the Aave protocol as of August 29, 2026 is approximately $1.00 billion, according to DefiLlama. This figure is the aggregate USD value of assets deposited in the protocol's smart contracts across all chains.",
+    );
+  });
+
+  it('uses the qualified two-sentence shape when a scoped question names DefiLlama', async () => {
+    vi.stubGlobal('fetch', (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('/tvl/aave')) return Promise.resolve(new Response('1000000000'));
+      if (url.endsWith('/v2/chains')) return Promise.resolve(new Response('[]'));
+      if (url.endsWith('/protocol/aave')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ currentChainTvls: { Ethereum: 600000000 } })),
+        );
+      }
+      return Promise.reject(new Error(`unexpected URL: ${url}`));
+    });
+    const r = await lookupTvl(
+      'aave',
+      new Date('2026-08-30T00:00:00.000Z'),
+      'Ethereum',
+      'What is the Aave TVL on Ethereum as reported by DefiLlama?',
+    );
+    expect(r.reason).toContain('This represents a significant portion');
+    expect(r.reason).not.toContain('share is 60.0%');
+    expect(r.reason).not.toContain('total value locked measures');
+  });
+
   it('reports a price as unavailable rather than not_found when the feed is down', async () => {
     failLlama();
     const r = await getCryptoPrice('BTC');

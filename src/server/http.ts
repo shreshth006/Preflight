@@ -274,7 +274,7 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
       // "Aave V3 on the Ethereum chain" asks for that chain's share, not the
       // protocol total across every deployment.
       const named = findChain(values) ?? chainFromText(values.text())?.key;
-      return lookupTvl(subject, new Date(), lookupChain(named ?? '')?.name);
+      return lookupTvl(subject, new Date(), lookupChain(named ?? '')?.name, values.context());
     },
   },
 };

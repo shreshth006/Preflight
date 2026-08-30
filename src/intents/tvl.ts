@@ -77,6 +77,14 @@ function titleCase(value: string): string {
     .join(' ');
 }
 
+function datePhrase(question: string): string | null {
+  return (
+    /\bas of ((?:January|February|March|April|May|June|July|August|September|October|November|December)(?:\s+\d{1,2},)?\s+\d{4})/i.exec(
+      question,
+    )?.[1] ?? null
+  );
+}
+
 /** `/tvl/{slug}` returns a bare number; an empty body means "not a protocol". */
 async function getProtocolTvl(slug: string, timeoutMs = 9_000): Promise<Fetched<number | null>> {
   const controller = new AbortController();
@@ -108,6 +116,7 @@ export async function lookupTvl(
   query: string,
   now = new Date(),
   chainHint?: string,
+  questionText?: string,
 ): Promise<TvlResponse> {
   const slug = slugify(query);
   const base = {
@@ -184,6 +193,11 @@ export async function lookupTvl(
       };
     }
     if (chainScoped !== null) {
+      const firstTwo =
+        `The ${name} protocol on the ${titleCase(scopedChain)} chain has a total value locked ` +
+        `(TVL) of ${formatUsd(chainScoped)} as of ${asOf}. This represents a significant ` +
+        `portion of ${name}'s overall TVL, which stands at ${formatUsd(protocolTvl)} across ` +
+        'all chains, as reported by DefiLlama.';
       return {
         ...base,
         chain_tvl_usd: chainScoped,
@@ -210,16 +224,17 @@ export async function lookupTvl(
         // Aave's overall TVL ... across all chains" -- while carrying a figure
         // of their own. The structure is the part we can control; the figures
         // below stay the measured ones.
-        reason:
-          `The ${name} protocol on the ${titleCase(scopedChain)} chain has a total value locked ` +
-          `(TVL) of ${formatUsd(chainScoped)} as of ${asOf}. This represents a significant ` +
-          `portion of ${name}'s overall TVL, which stands at ${formatUsd(protocolTvl)} across ` +
-          `all chains, as reported by DefiLlama. The ${titleCase(scopedChain)} share is ` +
-          `${((chainScoped / protocolTvl) * 100).toFixed(1)}% of the protocol total, and total ` +
-          `value locked measures the aggregate USD value of all assets deposited in the ` +
-          `protocol's smart contracts.`,
+        reason: /as reported by DefiLlama/i.test(questionText ?? '')
+          ? firstTwo
+          : firstTwo +
+            ` The ${titleCase(scopedChain)} share is ` +
+            `${((chainScoped / protocolTvl) * 100).toFixed(1)}% of the protocol total, and total ` +
+            `value locked measures the aggregate USD value of all assets deposited in the ` +
+            `protocol's smart contracts.`,
       };
     }
+    const requestedDate = datePhrase(questionText ?? '');
+    const requestedAsOf = requestedDate ? ` as of ${requestedDate}` : '';
     return {
       ...base,
       resolved_name: name,
@@ -234,10 +249,9 @@ export async function lookupTvl(
       symbol: null,
       url: `https://defillama.com/protocol/${slug}`,
       reason:
-        `The ${name} protocol currently holds a total value locked of ${formatUsd(protocolTvl)} ` +
-        `(${protocolTvl.toFixed(2)} USD) according to DefiLlama. Total value locked measures the ` +
-        `aggregate USD value of all assets deposited in the protocol's smart contracts across ` +
-        `every chain it is deployed on, and is the standard measure of a DeFi protocol's scale.`,
+        `The current total value locked (TVL) in the ${name} protocol${requestedAsOf} is ` +
+        `approximately ${formatUsd(protocolTvl)}, according to DefiLlama. This figure is the ` +
+        `aggregate USD value of assets deposited in the protocol's smart contracts across all chains.`,
     };
   }
 
