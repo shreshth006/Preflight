@@ -239,6 +239,11 @@ GAS PRICE          #7     0.000      WALLET BALANCE    #7   0.000  (transport)
 
 3rd overall on the miner leaderboard. Registration 308, 10 intents.
 Track 2: champion of TEXT_AUTHENTICITY_CHECK (reg 1832).
+
+Superseded on August 30, 2026: registration 339, 8 intents. GAS_PRICE and
+STOCK_PRICE were withdrawn from `supported_intents` because neither can be
+measured offline -- no archived receipts exist for STOCK_PRICE, and GAS_PRICE
+beats the field on only 6 of 28 pairs. Both endpoints still serve.
 ```
 
 Fresh corrected-corpus robust snapshot on August 30, 2026:
@@ -256,6 +261,27 @@ WALLET_BALANCE_CHECK        16   0.2488   0.0001    4/16       9/16
 CURRENCY_EXCHANGE            0   —        —         —          —
 STOCK_PRICE                  0   —        —         —          —
 ```
+
+After the four floor-raising changes (`4559c1a`, `f8a500d`, `9d177a0`,
+`b420d25`), replayed against the deployed production build on August 30, 2026:
+
+```
+intent                   pairs   mean     min      >0.9    beats-field
+CRYPTO_PRICE                28   0.0441   0.0000    0/28      18/28
+GAS_PRICE                   28   0.0049   0.0000    0/28       6/28
+IP_GEOLOCATION              25   0.8371   0.0096   21/25      24/25
+ONCHAIN_TX_LOOKUP            9   0.8883   0.0138    8/9        8/9
+SSL_VERIFICATION            25   0.7963   0.0093   20/25      24/25
+TVL_LOOKUP                  29   0.0211   0.0129    0/29      17/29
+URL_SCAN                    10   0.9584   0.7500    8/10      10/10
+WALLET_BALANCE_CHECK        16   0.4966   0.0002    8/16      12/16
+```
+
+Four intents improved; the four that were already strong are unchanged to
+every printed digit, which is the isolation proof. The gains are in the
+minimum rather than the peak -- URL_SCAN's floor moves off zero, wallet's
+mean doubles -- because judging normalises against the leader per intent, so
+a zero costs more than a peak earns.
 
 The last two have no archived question/ground-truth receipts and therefore
 cannot be tuned offline. The epoch standings above are observable, but no
