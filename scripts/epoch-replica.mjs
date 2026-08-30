@@ -58,6 +58,7 @@ const ENDPOINTS = {
   CURRENCY_EXCHANGE: (q) => `/fx-rate?pair=${encodeURIComponent(q)}`,
   IP_GEOLOCATION: (q) => `/ip-geolocation?ip=${encodeURIComponent(ipFrom(q) ?? '')}`,
   STOCK_PRICE: (q) => `/stock-price?symbol=${encodeURIComponent(q)}`,
+  ACADEMIC_SEARCH: (q) => `/papers?query=${encodeURIComponent(q)}`,
 };
 
 const hostFrom = (q) => /\b((?:[a-z0-9-]+\.)+[a-z]{2,})\b/i.exec(q)?.[1] ?? null;

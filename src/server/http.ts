@@ -41,6 +41,7 @@ import { getExchangeRate } from '../intents/currencyExchange.js';
 import { locateIp } from '../intents/ipGeolocation.js';
 import { getStockPrice } from '../intents/stockPrice.js';
 import { getCryptoPrice } from '../intents/cryptoPrice.js';
+import { searchAcademicPapers } from '../intents/academicSearch.js';
 import type { AppConfig } from './config.js';
 import { createLogger } from '../observability/logger.js';
 
@@ -72,6 +73,7 @@ const REQUEST_SUBJECTS: Record<string, string> = {
   '/fx-rate': 'currency-exchange lookup',
   '/ip-geolocation': 'IP-geolocation lookup',
   '/stock-price': 'stock-price lookup',
+  '/papers': 'academic-paper search',
 };
 
 function requestFailure(path: string, message: string, invalid: boolean): RequestFailureResponse {
@@ -265,6 +267,22 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
         );
       }
       return getStockPrice(values.all().join(' '));
+    },
+  },
+  '/papers': {
+    intent: 'ACADEMIC_SEARCH',
+    handle: async (values) => {
+      const directTopic = values.get(['topic', 'subject', 'keywords', 'search']);
+      const context = values.context();
+      const input = context ?? directTopic ?? values.text();
+      if (!input) {
+        return unanswerable(
+          'An academic-paper search',
+          'a research topic',
+          'A paper search needs a subject such as quantum error correction or AI safety.',
+        );
+      }
+      return searchAcademicPapers(input);
     },
   },
   '/tvl': {

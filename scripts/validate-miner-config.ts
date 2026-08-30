@@ -90,6 +90,7 @@ const INTENT_ENDPOINTS: Record<string, string> = {
   CURRENCY_EXCHANGE: '/fx-rate',
   IP_GEOLOCATION: '/ip-geolocation',
   STOCK_PRICE: '/stock-price',
+  ACADEMIC_SEARCH: '/papers',
 };
 const paths = new Set(
   endpoints.map((endpointValue) => record(endpointValue, 'endpoint').path as string),

@@ -137,6 +137,7 @@ describe('HTTP miner', () => {
       '/fx-rate',
       '/ip-geolocation',
       '/stock-price',
+      '/papers',
     ];
     const malformed = await Promise.all(paths.map((path) => raw('POST', path, '{')));
     for (const response of malformed) {
@@ -166,6 +167,7 @@ describe('HTTP miner', () => {
       '/fx-rate',
       '/ip-geolocation',
       '/stock-price',
+      '/papers',
     ];
     const missing = await Promise.all(missingPaths.map((path) => get(path)));
     for (const response of missing) {
@@ -235,6 +237,38 @@ describe('HTTP miner', () => {
     expect(response.body.amount).toBe(100);
     expect(response.body.converted).toBe(15_968);
     expect(response.body.as_of).toBe('2026-08-28T00:00:00.000Z');
+  });
+
+  it('serves bounded academic-search prose from either query or topic input', async () => {
+    vi.stubGlobal('fetch', () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            results: [
+              {
+                title: 'Succinct Proof Systems',
+                publication_year: 2025,
+                cited_by_count: 12,
+                authorships: [{ author: { display_name: 'A. Researcher' } }],
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const byQuery = await get(
+      '/papers?query=Find%205%20papers%20about%20zero%20knowledge%20proofs',
+    );
+    expect(byQuery.status).toBe(200);
+    expect(byQuery.body.verdict).toBe('found');
+    expect(byQuery.body.result_count).toBe(1);
+    expectCleanReason(byQuery.body);
+
+    const byTopic = await get('/papers?topic=quantum%20error%20correction');
+    expect(byTopic.status).toBe(200);
+    expect(byTopic.body.verdict).toBe('found');
+    expectCleanReason(byTopic.body);
   });
 });
 
