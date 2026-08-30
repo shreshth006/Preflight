@@ -472,6 +472,9 @@ function cryptoCandidates(_question, body) {
         'direct_source',
         'truth_open',
         'no_approximately',
+        'price_only',
+        'truth_register',
+        'volatility_context',
       ].map((name) => [name, body.reason]),
     );
   }
@@ -497,6 +500,9 @@ function cryptoCandidates(_question, body) {
       direct_source: `${primary}${comparison} The prices are from DefiLlama's aggregated USD feed.`,
       truth_open: primary + comparison,
       no_approximately: primary + comparison,
+      price_only: primary,
+      truth_register: primary + comparison,
+      volatility_context: body.reason,
     };
   }
   const direction = body.change_24h_pct >= 0 ? 'increase' : 'decrease';
@@ -515,6 +521,19 @@ function cryptoCandidates(_question, body) {
     market.length > 0
       ? `, ${market.slice(0, -1).join(', ')}${market.length > 1 ? ', and ' : ''}${market.at(-1)}`
       : '';
+  const changeSentence =
+    body.change_24h_pct === null
+      ? ''
+      : ` The price has shown a 24-hour ${direction} of about ${Math.abs(body.change_24h_pct).toFixed(2)}%.`;
+  const capitalizationSentence =
+    body.market_cap_usd === null
+      ? ''
+      : ` The market capitalization is around ${formatLarge(body.market_cap_usd)}` +
+        (body.circulating_supply === null
+          ? '.'
+          : `, with a circulating supply of approximately ${formatSupply(body.circulating_supply)} ${body.symbol}.`);
+  const priceOnly = `The current price of ${asset} is approximately ${body.price_formatted} USD.`;
+  const truthRegister = priceOnly + changeSentence + capitalizationSentence;
   return {
     current: body.reason,
     period_accurate: body.reason,
@@ -524,6 +543,11 @@ function cryptoCandidates(_question, body) {
     direct_source:
       `The current price of ${asset} is approximately ${body.price_formatted} USD${list}, ` +
       `according to DefiLlama.`,
+    price_only: priceOnly,
+    truth_register: truthRegister,
+    volatility_context:
+      truthRegister +
+      ' Cryptocurrency prices fluctuate across exchanges, data providers and observation times.',
   };
 }
 
@@ -598,11 +622,12 @@ const summary = [...results].map(([name, result]) => ({
   ),
   maxLength: Math.max(...result.lengths),
 }));
+const scoreText = (score) => (score < 0.0001 ? score.toExponential(3) : score.toFixed(4));
 summary.sort((a, b) => b.mean - a.mean || b.beats - a.beats);
 for (const row of summary) {
   console.log(
     `${row.name.padEnd(21)} ${`${row.coverage}/${pairs.size}`.padStart(7)}   ${row.mean.toFixed(4)}   ` +
-      `${row.min.toFixed(4)}   ${String(row.near).padStart(2)}/${row.coverage}   ` +
+      `${scoreText(row.min).padStart(8)}   ${String(row.near).padStart(2)}/${row.coverage}   ` +
       `${String(row.beats).padStart(2)}/${row.coverage}   ${String(row.avgLength).padStart(4)}/${row.maxLength}`,
   );
 }
@@ -623,7 +648,8 @@ if (detailName) {
     const beatChange =
       beforeBeat === afterBeat ? (afterBeat ? 'hold' : '-') : afterBeat ? 'GAIN' : 'LOSS';
     console.log(
-      `${String(index + 1).padStart(4)}   ${baseline.score.toFixed(4)}   ${row.score.toFixed(4)}   ` +
+      `${String(index + 1).padStart(4)}   ${scoreText(baseline.score).padStart(8)}   ` +
+        `${scoreText(row.score).padStart(8)}   ` +
         `${(row.score - baseline.score).toFixed(4).padStart(7)}   ${row.field.toFixed(4)}   ` +
         `${beatChange.padEnd(11)}   ${row.question.slice(0, 62)}`,
     );

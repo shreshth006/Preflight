@@ -126,6 +126,46 @@ describe('upstream failure is not evidence of absence', () => {
     expect(requested.some((url) => url.includes('/prices/current/'))).toBe(false);
   });
 
+  it('uses the robust current-price register when market enrichment is available', async () => {
+    vi.stubGlobal('fetch', (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('/prices/current/')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              coins: {
+                'coingecko:solana': {
+                  price: 105.48,
+                  symbol: 'SOL',
+                  timestamp: 1_787_000_000,
+                  confidence: 0.99,
+                },
+              },
+            }),
+          ),
+        );
+      }
+      if (url.includes('/coins/markets')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                price_change_percentage_24h: 1.72,
+                market_cap: 61_730_000_000,
+                circulating_supply: 585_100_000,
+              },
+            ]),
+          ),
+        );
+      }
+      return Promise.reject(new Error(`unexpected URL: ${url}`));
+    });
+    const r = await getCryptoPrice('SOL');
+    expect(r.reason).toBe(
+      'The current price of Solana (SOL) is approximately $105.48 USD. The price has shown a 24-hour increase of about 1.72%. The market capitalization is around $61.73 billion, with a circulating supply of approximately 585.1 million SOL. Cryptocurrency prices fluctuate across exchanges, data providers and observation times.',
+    );
+  });
+
   it('still reports a genuinely unknown asset as not_found', async () => {
     const r = await getCryptoPrice('definitelynotarealassetxyz123');
     expect(r.verdict).toBe('not_found');
