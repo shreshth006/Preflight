@@ -93,19 +93,31 @@ export function documentedPageReason(
   url: URL,
   verdict: UrlScanResponse['verdict'],
   reference: ThreatReference,
-): string | null {
+): string {
   const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
-  if (hostname !== 'microsoft.com' || reference.name !== 'Necurs botnet takedown') return null;
+  if (hostname === 'microsoft.com' && reference.name === 'Necurs botnet takedown') {
+    const assessment =
+      verdict === 'safe'
+        ? 'is a legitimate Microsoft Security Response Center page and is safe to visit, not Necurs infrastructure'
+        : `was judged ${verdict} by the live scan`;
+    return (
+      `The URL ${url.toString()} ${assessment}. ` +
+      "It documents Microsoft's 2020 legal and technical takedown of the Necurs botnet, which " +
+      'infected over 9 million computers. Microsoft and partners in 35 countries blocked over 6 ' +
+      'million predicted command-and-control domains.'
+    );
+  }
 
   const assessment =
     verdict === 'safe'
-      ? 'is a legitimate Microsoft Security Response Center page and is safe to visit, not Necurs infrastructure'
-      : `was judged ${verdict} by the live scan`;
+      ? 'scanned safe in the live URL, DNS, TLS and HTTP checks'
+      : verdict === 'unreachable'
+        ? 'could not be retrieved, so no live safety verdict is available'
+        : `was judged ${verdict} by the live scan`;
   return (
-    `The URL ${url.toString()} ${assessment}. ` +
-    "It documents Microsoft's 2020 legal and technical takedown of the Necurs botnet, which " +
-    'infected over 9 million computers. Microsoft and partners in 35 countries blocked over 6 ' +
-    'million predicted command-and-control domains.'
+    `The URL on ${hostname} ${assessment}. Its path or surrounding question refers to ` +
+    `${reference.name}; that incident is context for the page, not evidence that ${hostname} ` +
+    `was infrastructure operated by the campaign. ${reference.facts[0]}`
   );
 }
 

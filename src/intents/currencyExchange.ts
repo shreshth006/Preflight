@@ -13,6 +13,23 @@
 
 const ER_API = 'https://open.er-api.com/v6/latest';
 const FRANKFURTER_API = 'https://api.frankfurter.dev/v1';
+const CALENDAR_MONTH =
+  '(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)';
+const MONTH_INDEX: Record<string, number> = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  sept: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
+};
 
 /** Currency names the router is likely to send, mapped to ISO 4217 codes. */
 const NAMES: Record<string, string> = {
@@ -64,6 +81,13 @@ export interface CurrencyExchangeResponse {
   confidence: number;
   reason: string;
   checked_at: string;
+}
+
+export interface CurrencyExchangeHints {
+  from?: string;
+  to?: string;
+  date?: string;
+  amount?: number;
 }
 
 /**
@@ -125,7 +149,16 @@ export function amountIn(
   // Calendar dates are not conversion amounts. Epoch 293 supplied
   // `date=2026-08-28&from=USD&to=JPY`; the old fallback attached the day 28 to
   // USD and claimed that 28 USD was being converted.
-  const amountText = text.replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ');
+  const amountText = text
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ')
+    .replace(
+      new RegExp(`\\b${CALENDAR_MONTH}\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+\\d{4})?\\b`, 'gi'),
+      ' ',
+    )
+    .replace(
+      new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+${CALENDAR_MONTH}(?:\\s+\\d{4})?\\b`, 'gi'),
+      ' ',
+    );
   // Up to three words between the figure and the currency covers "100 US
   // dollars" and "100 units of USD" without spanning a clause.
   const re = /(\d[\d,]*(?:\.\d+)?)\s*((?:[A-Za-z.]+\s+){0,3}[A-Za-z.]+)/g;
@@ -143,13 +176,38 @@ export function amountIn(
   };
 }
 
-function requestedDateIn(text: string): string | null {
-  const match = /\b(\d{4}-\d{2}-\d{2})\b/.exec(text)?.[1];
-  if (!match) return null;
-  const parsed = new Date(`${match}T00:00:00.000Z`);
-  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== match
-    ? null
-    : match;
+export function requestedDateIn(text: string): string | null {
+  const normalize = (year: number, month: number, day: number): string | null => {
+    const parsed = new Date(Date.UTC(year, month, day));
+    if (
+      parsed.getUTCFullYear() !== year ||
+      parsed.getUTCMonth() !== month ||
+      parsed.getUTCDate() !== day
+    ) {
+      return null;
+    }
+    return parsed.toISOString().slice(0, 10);
+  };
+
+  const iso = /\b(\d{4})-(\d{2})-(\d{2})\b/.exec(text);
+  if (iso) return normalize(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+
+  const monthFirst = new RegExp(
+    `\\b${CALENDAR_MONTH}\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})\\b`,
+    'i',
+  ).exec(text);
+  const dayFirst = new RegExp(
+    `\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+${CALENDAR_MONTH}\\s+(\\d{4})\\b`,
+    'i',
+  ).exec(text);
+  const monthName = monthFirst?.[1] ?? dayFirst?.[2];
+  const day = monthFirst?.[2] ?? dayFirst?.[1];
+  const year = monthFirst?.[3] ?? dayFirst?.[3];
+  if (!monthName || !day || !year) return null;
+  const month =
+    MONTH_INDEX[monthName.toLowerCase().slice(0, 4)] ??
+    MONTH_INDEX[monthName.toLowerCase().slice(0, 3)];
+  return month === undefined ? null : normalize(Number(year), month, Number(day));
 }
 
 async function historicalRate(
@@ -186,6 +244,7 @@ function formatRate(value: number): string {
 export async function getExchangeRate(
   query: string,
   now = new Date(),
+  hints: CurrencyExchangeHints = {},
 ): Promise<CurrencyExchangeResponse> {
   const base = {
     query,
@@ -241,13 +300,22 @@ export async function getExchangeRate(
 
   const known = new Set(Object.keys(rates));
   const found = currenciesIn(query, known);
-  const { amount, base: amountCurrency } = amountIn(query, known);
+  const inferredAmount = amountIn(query, known);
+  const amount = hints.amount ?? inferredAmount.amount;
+  const amountCurrency = hints.amount === undefined ? inferredAmount.base : (hints.from ?? null);
+  const hintedFrom = hints.from?.trim().toUpperCase();
+  const hintedTo = hints.to?.trim().toUpperCase();
+  const explicitPair =
+    hintedFrom && hintedTo && known.has(hintedFrom) && known.has(hintedTo)
+      ? [hintedFrom, hintedTo]
+      : null;
   // The currency the amount is attached to leads, so "how many rupees is 100
   // dollars worth" quotes USD/INR rather than its inverse.
   const codes =
-    amountCurrency && found.includes(amountCurrency)
+    explicitPair ??
+    (amountCurrency && found.includes(amountCurrency)
       ? [amountCurrency, ...found.filter((c) => c !== amountCurrency)]
-      : found;
+      : found);
 
   if (codes.length < 2) {
     return {
@@ -289,7 +357,7 @@ export async function getExchangeRate(
     };
   }
 
-  const requestedDate = requestedDateIn(query);
+  const requestedDate = requestedDateIn(hints.date ?? query);
   const historical = requestedDate ? await historicalRate(requestedDate, from, to) : null;
   if (requestedDate && !historical) {
     return {

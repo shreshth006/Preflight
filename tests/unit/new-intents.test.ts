@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amountIn, currenciesIn } from '../../src/intents/currencyExchange.js';
+import { amountIn, currenciesIn, requestedDateIn } from '../../src/intents/currencyExchange.js';
 import { ipIn, reservedBlock } from '../../src/intents/ipGeolocation.js';
 import { tickerFrom } from '../../src/intents/stockPrice.js';
 
@@ -39,6 +39,32 @@ describe('amountIn', () => {
 
   it('does not treat an ISO calendar date as a conversion amount', () => {
     expect(amountIn('2026-08-28 USD JPY', KNOWN)).toEqual({ amount: 1, base: null });
+  });
+
+  it('does not treat written calendar dates as conversion amounts', () => {
+    expect(amountIn('USD to JPY on August 28, 2026', KNOWN)).toEqual({
+      amount: 1,
+      base: null,
+    });
+    expect(amountIn('Convert 100 USD to JPY on 28th August 2026', KNOWN)).toEqual({
+      amount: 100,
+      base: 'USD',
+    });
+  });
+});
+
+describe('requestedDateIn', () => {
+  it.each([
+    ['2026-08-28 USD JPY', '2026-08-28'],
+    ['USD to JPY on August 28, 2026', '2026-08-28'],
+    ['USD to JPY on 28th August 2026', '2026-08-28'],
+  ])('normalizes %s', (text, expected) => {
+    expect(requestedDateIn(text)).toBe(expected);
+  });
+
+  it('rejects an invalid date instead of allowing rollover', () => {
+    expect(requestedDateIn('2026-02-31 USD JPY')).toBeNull();
+    expect(requestedDateIn('USD to JPY on February 31, 2026')).toBeNull();
   });
 });
 

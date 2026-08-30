@@ -59,4 +59,35 @@ describe('historical currency exchange', () => {
     expect(result.rate).toBeNull();
     expect(result.reason).toContain('No current rate is substituted');
   });
+
+  it('obeys explicit pair, amount and date semantics regardless of text order', async () => {
+    vi.stubGlobal('fetch', (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.startsWith('https://open.er-api.com/')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ result: 'success', rates: { USD: 1, JPY: 160 } }), {
+            status: 200,
+          }),
+        );
+      }
+      expect(url).toBe('https://api.frankfurter.dev/v1/2026-08-28?base=USD&symbols=JPY');
+      return Promise.resolve(
+        new Response(JSON.stringify({ date: '2026-08-28', rates: { JPY: 159.68 } }), {
+          status: 200,
+        }),
+      );
+    });
+
+    const result = await getExchangeRate('JPY 2026-08-28 USD', new Date(), {
+      from: 'usd',
+      to: 'jpy',
+      date: 'August 28, 2026',
+      amount: 100,
+    });
+    expect(result.base).toBe('USD');
+    expect(result.quote).toBe('JPY');
+    expect(result.amount).toBe(100);
+    expect(result.converted).toBe(15_968);
+    expect(result.as_of).toBe('2026-08-28T00:00:00.000Z');
+  });
 });

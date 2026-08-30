@@ -108,6 +108,38 @@ describe('Telegraph response adapter', () => {
     expect(timeout.reason).toMatch(/Subject Alternative Names/i);
   });
 
+  it('keeps timeout prose aligned with the network stage that completed', () => {
+    const tcp = toTelegraphResponse({
+      ...base,
+      dnsResolved: true,
+      reachable: false,
+      handshakeSucceeded: false,
+      certificatePresent: false,
+      chainTrusted: null,
+      hostnameValid: null,
+      timeValid: null,
+      valid: false,
+      failureCode: 'TIMEOUT',
+    });
+    expect(tcp.reason).toMatch(/resolved in public DNS.*TCP connection/i);
+    expect(tcp.reason).not.toMatch(/does not resolve/i);
+
+    const tls = toTelegraphResponse({
+      ...base,
+      dnsResolved: true,
+      reachable: true,
+      handshakeSucceeded: false,
+      certificatePresent: false,
+      chainTrusted: null,
+      hostnameValid: null,
+      timeValid: null,
+      valid: false,
+      failureCode: 'TIMEOUT',
+    });
+    expect(tls.reason).toMatch(/reachable.*did not complete a TLS handshake/i);
+    expect(tls.reason).not.toMatch(/does not resolve|TCP connection/i);
+  });
+
   it('reports a blocked private destination without claiming a DNS failure', () => {
     const blocked = toTelegraphResponse({
       ...base,

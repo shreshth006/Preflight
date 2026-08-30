@@ -70,11 +70,33 @@ describe('url scan verdict precedence', () => {
     const reference = threatReferenceFor(null, url.toString());
     expect(reference).not.toBeNull();
     const reason = documentedPageReason(url, 'safe', reference!);
-    expect(reason).toContain('safe to visit');
-    expect(reason).toContain('legitimate Microsoft Security Response Center page');
-    expect(reason).toContain('over 9 million computers');
-    expect(reason).toContain('over 6 million predicted command-and-control domains');
-    expect(reason!.length).toBeLessThan(500);
+    expect(reason).toBe(
+      "The URL https://www.microsoft.com/en-us/msrc/blog/2020/07/01/microsoft-takedown-of-necurs-botnet-domain-infrastructure/ is a legitimate Microsoft Security Response Center page and is safe to visit, not Necurs infrastructure. It documents Microsoft's 2020 legal and technical takedown of the Necurs botnet, which infected over 9 million computers. Microsoft and partners in 35 countries blocked over 6 million predicted command-and-control domains.",
+    );
+    expect(reason.length).toBeLessThan(500);
+  });
+
+  it('treats a campaign named in an ordinary publisher path as page context', () => {
+    const url = new URL('https://security.example/research/conficker-domain-generation-algorithm');
+    const reference = threatReferenceFor(null, url.toString());
+    expect(reference).not.toBeNull();
+    const reason = documentedPageReason(url, 'safe', reference!);
+    expect(reason).toContain('scanned safe');
+    expect(reason).toContain('Conficker domain generation algorithm');
+    expect(reason).toContain('context for the page');
+    expect(reason).toContain(
+      'not evidence that security.example was infrastructure operated by the campaign',
+    );
+    expect(reason.length).toBeLessThan(500);
+  });
+
+  it('does not override an unsafe live verdict just because a path names an incident', () => {
+    const url = new URL('http://lookalike.example/reports/wannacry-killswitch');
+    const reference = threatReferenceFor(null, url.toString());
+    expect(reference).not.toBeNull();
+    const reason = documentedPageReason(url, 'malicious', reference!);
+    expect(reason).toContain('judged malicious');
+    expect(reason).not.toContain('scanned safe');
   });
 
   it('judges a private or reserved target unsafe rather than unreachable', async () => {

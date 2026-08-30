@@ -172,7 +172,7 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
   '/url-scan': {
     intent: 'URL_SCAN',
     handle: async (values, config) => {
-      const questionText = values.all().join(' ');
+      const questionText = values.context() ?? values.text();
       const target = findUrl(values);
       if (!target) {
         const documented = describeDocumentedIncident(questionText);
@@ -197,7 +197,7 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
           'A quote needs a ticker such as BTC or a name such as Bitcoin.',
         );
       }
-      return getCryptoPrice(subject, new Date(), values.all().join(' '));
+      return getCryptoPrice(subject, new Date(), values.context() ?? values.text());
     },
   },
   '/fx-rate': {
@@ -213,7 +213,17 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
           'A rate needs two currencies, as ISO 4217 codes such as USD and EUR or as their names.',
         );
       }
-      return getExchangeRate(text);
+      const amountText = values.get(['amount', 'value', 'quantity']);
+      const amount = amountText === undefined ? undefined : Number(amountText.replace(/,/g, ''));
+      const from = values.get(['from', 'base', 'source_currency', 'source']);
+      const to = values.get(['to', 'quote', 'target_currency', 'target']);
+      const date = values.get(['date', 'as_of', 'on']);
+      return getExchangeRate(text, new Date(), {
+        ...(from === undefined ? {} : { from }),
+        ...(to === undefined ? {} : { to }),
+        ...(date === undefined ? {} : { date }),
+        ...(amount !== undefined && Number.isFinite(amount) && amount > 0 ? { amount } : {}),
+      });
     },
   },
   '/ip-geolocation': {

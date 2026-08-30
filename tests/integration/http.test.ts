@@ -198,6 +198,32 @@ describe('HTTP miner', () => {
     expect(response.body.documented_incident).toBe('Necurs botnet takedown');
     expect(response.body.hostname).toBeNull();
   });
+
+  it('preserves explicit FX semantics across adversarial parameter order', async () => {
+    vi.stubGlobal('fetch', (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.startsWith('https://open.er-api.com/')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ result: 'success', rates: { USD: 1, JPY: 160 } }), {
+            status: 200,
+          }),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ date: '2026-08-28', rates: { JPY: 159.68 } }), {
+          status: 200,
+        }),
+      );
+    });
+
+    const response = await get('/fx-rate?to=JPY&amount=100&date=2026-08-28&from=USD');
+    expect(response.status).toBe(200);
+    expect(response.body.base).toBe('USD');
+    expect(response.body.quote).toBe('JPY');
+    expect(response.body.amount).toBe(100);
+    expect(response.body.converted).toBe(15_968);
+    expect(response.body.as_of).toBe('2026-08-28T00:00:00.000Z');
+  });
 });
 
 describe('a question missing its parameter is answered, not refused', () => {

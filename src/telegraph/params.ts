@@ -10,10 +10,13 @@ export interface RequestValues {
   get(keys: string[]): string | undefined;
   all(): string[];
   text(): string;
+  /** Original natural-language context, separate from structured parameters. */
+  context(): string | undefined;
 }
 
-export function valuesFromQuery(query: URLSearchParams): RequestValues {
-  const entries = [...query.entries()];
+const CONTEXT_KEYS = new Set(['query', 'q', 'question', 'prompt', 'text', 'input']);
+
+function requestValues(entries: Array<[string, string]>): RequestValues {
   return {
     get(keys) {
       for (const key of keys) {
@@ -24,7 +27,17 @@ export function valuesFromQuery(query: URLSearchParams): RequestValues {
     },
     all: () => entries.map(([, v]) => v).filter(Boolean),
     text: () => entries.map(([, v]) => v).join(' '),
+    context: () => {
+      const values = entries
+        .filter(([key, value]) => CONTEXT_KEYS.has(key.toLowerCase()) && value.trim())
+        .map(([, value]) => value.trim());
+      return values.length > 0 ? values.join(' ') : undefined;
+    },
   };
+}
+
+export function valuesFromQuery(query: URLSearchParams): RequestValues {
+  return requestValues([...query.entries()]);
 }
 
 function flatten(value: unknown, depth = 0): Array<[string, string]> {
@@ -40,18 +53,7 @@ function flatten(value: unknown, depth = 0): Array<[string, string]> {
 }
 
 export function valuesFromBody(body: unknown): RequestValues {
-  const entries = flatten(body);
-  return {
-    get(keys) {
-      for (const key of keys) {
-        const found = entries.find(([k]) => k === key);
-        if (found?.[1]?.trim()) return found[1].trim();
-      }
-      return undefined;
-    },
-    all: () => entries.map(([, v]) => v).filter(Boolean),
-    text: () => entries.map(([, v]) => v).join(' '),
-  };
+  return requestValues(flatten(body));
 }
 
 const ADDRESS_PATTERN = /\b0x[0-9a-fA-F]{40}\b/;
@@ -139,18 +141,20 @@ export function findSubject(values: RequestValues): string | undefined {
     'asset',
     'coin',
     'ticker',
+    'symbol',
+    'currency',
     'protocol',
     'project',
     'name',
     'slug',
-    'query',
-    'q',
-    'symbol',
     'token',
     'chain',
+    'query',
+    'q',
     'input',
     'text',
     'question',
+    'prompt',
   ]);
 }
 

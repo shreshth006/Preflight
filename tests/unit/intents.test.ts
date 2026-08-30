@@ -12,6 +12,7 @@ import {
   findAddress,
   findChain,
   findEnsName,
+  findSubject,
   findTxHash,
   findTvlSubject,
   findUrl,
@@ -104,6 +105,26 @@ describe('tolerant parameter extraction', () => {
     expect(findUrl(valuesFromBody({ text: 'please scan https://example.com/a?b=1 now' }))).toBe(
       'https://example.com/a?b=1',
     );
+  });
+
+  it('keeps structured subjects authoritative over surrounding question context', () => {
+    const values = valuesFromQuery(
+      q(
+        'query=What+is+the+current+price+of+Ethereum+according+to+CoinGecko%3F&currency=BTC&unit=USD',
+      ),
+    );
+    expect(findSubject(values)).toBe('BTC');
+    expect(values.context()).toBe('What is the current price of Ethereum according to CoinGecko?');
+    expect(values.text()).toContain('BTC');
+  });
+
+  it('preserves natural-language context independently of parameter order', () => {
+    const first = valuesFromQuery(q('question=scan+this+page&url=https%3A%2F%2Fexample.com'));
+    const last = valuesFromQuery(q('url=https%3A%2F%2Fexample.com&question=scan+this+page'));
+    expect(first.context()).toBe('scan this page');
+    expect(last.context()).toBe('scan this page');
+    expect(findUrl(first)).toBe('https://example.com');
+    expect(findUrl(last)).toBe('https://example.com');
   });
 
   it('does not mistake a transaction hash for an address', () => {
