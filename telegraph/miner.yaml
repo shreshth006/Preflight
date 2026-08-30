@@ -275,4 +275,3 @@ semantics:
     - CRYPTO_PRICE
     - CURRENCY_EXCHANGE
     - IP_GEOLOCATION
-    - STOCK_PRICE
