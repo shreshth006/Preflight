@@ -373,10 +373,21 @@ export async function scanUrl(
       : observed
         ? ' No risk indicators were triggered by these checks.'
         : '';
-  // Reported alongside the live scan and attributed, never folded into the
-  // risk score: the score describes what this scan observed now, and the
-  // reference material describes what was reported at the time.
-  const reference = threatReferenceFor(hostname, questionText);
+  // Reference material is reported alongside the live scan and never folded
+  // into the risk score: the score describes what this scan observed now.
+  //
+  // Two different questions arrive at this code path. "Is avsvmcloud.com
+  // safe?" asks *about* a documented host, and the documented account is the
+  // answer. "Scan https://microsoft.com/.../necurs-botnet-takedown/" asks for
+  // a live scan of an ordinary host whose URL merely mentions a campaign, and
+  // the answer is the scan. Only a match on the hostname itself distinguishes
+  // the first, so the substitution below is keyed on that and not on the
+  // question text: in epoch 293 the campaign name in a microsoft.com URL path
+  // replaced the scan of a legitimate Microsoft page with Necurs history and
+  // scored 1.25e-21 against the champion module, having led this intent the
+  // epoch before.
+  const hostReference = threatReferenceFor(hostname);
+  const reference = hostReference ?? threatReferenceFor(null, questionText);
   const scopeSentence =
     ' This assessment covers URL structure, DNS resolution, TLS certificate validation and the' +
     ' HTTP response. It does not consult domain reputation, blocklist or threat-intelligence' +
@@ -427,18 +438,13 @@ export async function scanUrl(
     findings,
     security_headers: headers,
     confidence: 1,
-    // When the host is one this intent is asked *about* rather than asked to
-    // scan, the documented reporting is the answer and leads. Appending it
-    // after the whole scan narrative left it at the tail, where the
-    // summariser drops it -- the same way trailing fee and confirmation
-    // detail displaced the addresses from ONCHAIN_TX_LOOKUP.
     // When the host is one this intent is asked *about*, the answer is the
     // documented account and nothing else. Appending the live scan measurably
     // costs score -- 0.0207 for the facts alone against 0.0073 with the scan
     // narrative attached -- and the scan's findings remain in the structured
     // fields for a caller that wants them.
-    reason: reference
-      ? reference.facts.join(' ')
+    reason: hostReference
+      ? hostReference.facts.join(' ')
       : `${headline}${tlsSentence}${httpSentence}${dnsSentence}${findingSentence}` +
         `${truncatedSentence}${historySentence}${scopeSentence}`,
     checked_at: now.toISOString(),

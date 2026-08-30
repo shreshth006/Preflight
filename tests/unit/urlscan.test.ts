@@ -41,6 +41,23 @@ describe('url scan verdict precedence', () => {
     expect(result.documented_facts?.join(' ')).toContain('command-and-control domain');
   });
 
+  it('scans an ordinary host whose URL path merely names a campaign', async () => {
+    // Epoch 293 asked for a scan of a microsoft.com page about the Necurs
+    // takedown. Matching the campaign on the question text replaced the scan
+    // of a legitimate Microsoft host with Necurs history, and the champion
+    // module scored that 1.25e-21, the epoch after this intent led.
+    const result = await scanUrl(
+      'http://127.0.0.1/2020/07/01/microsoft-takedown-of-necurs-botnet-domain-infrastructure/',
+      {},
+      new Date(),
+      'necurs botnet takedown',
+    );
+
+    expect(result.documented_incident).toBe('Necurs botnet takedown');
+    expect(result.reason).not.toBe(result.documented_facts?.join(' '));
+    expect(result.reason).toContain('127.0.0.1');
+  });
+
   it('judges a private or reserved target unsafe rather than unreachable', async () => {
     // The intent asks for a URL to be judged safe or unsafe. A cloud-metadata
     // address is conclusively unsafe without fetching it, and reporting it as
