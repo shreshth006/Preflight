@@ -42,6 +42,7 @@ import { locateIp } from '../intents/ipGeolocation.js';
 import { getStockPrice } from '../intents/stockPrice.js';
 import { getCryptoPrice } from '../intents/cryptoPrice.js';
 import { searchAcademicPapers } from '../intents/academicSearch.js';
+import { lookupCve } from '../intents/cveLookup.js';
 import type { AppConfig } from './config.js';
 import { createLogger } from '../observability/logger.js';
 
@@ -74,6 +75,7 @@ const REQUEST_SUBJECTS: Record<string, string> = {
   '/ip-geolocation': 'IP-geolocation lookup',
   '/stock-price': 'stock-price lookup',
   '/papers': 'academic-paper search',
+  '/cve': 'CVE vulnerability lookup',
 };
 
 function requestFailure(path: string, message: string, invalid: boolean): RequestFailureResponse {
@@ -283,6 +285,21 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
         );
       }
       return searchAcademicPapers(input);
+    },
+  },
+  '/cve': {
+    intent: 'CVE_LOOKUP',
+    handle: async (values) => {
+      const direct = values.get(['cve_query', 'cve_id', 'cve', 'id']);
+      const input = values.context() ?? direct ?? values.text();
+      if (!input) {
+        return unanswerable(
+          'A CVE vulnerability lookup',
+          'a CVE identifier',
+          'A vulnerability lookup needs an identifier such as CVE-2021-44228.',
+        );
+      }
+      return lookupCve(input);
     },
   },
   '/tvl': {

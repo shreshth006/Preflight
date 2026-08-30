@@ -73,6 +73,10 @@
     {
       "source": "/papers",
       "destination": "/api/index"
+    },
+    {
+      "source": "/cve",
+      "destination": "/api/index"
     }
   ]
 }

@@ -14,7 +14,8 @@ description: >
   OP Mainnet and Polygon, with EIP-7702 delegated accounts reported correctly.
   Total value locked and cryptocurrency spot prices are mirrored from
   DefiLlama. Academic paper searches use OpenAlex and preserve requested
-  publication windows, result counts and ordering.
+  publication windows, result counts and ordering. CVE lookups combine
+  canonical CVE.org records with NVD severity and exploitation metadata.
 base_url: https://preflight-ssl-verification.vercel.app
 
 docs:
@@ -102,6 +103,13 @@ endpoints:
       Peer-reviewed papers for a research question, optionally constrained by
       publication dates, result count and citation or recency ordering, from
       OpenAlex.
+  - path: /cve
+    external_path: /cve
+    method: GET
+    description: >
+      Vulnerability details for a CVE identifier, including severity, CVSS
+      scores, affected versions and known-exploitation status, from CVE.org
+      and NVD.
 
 input_schema:
   type: object
@@ -153,6 +161,12 @@ input_schema:
         research subject and any publication dates, result count, field
         constraints or requested ordering. Preserve the question verbatim
         rather than reducing it to keywords.
+    cve_query:
+      type: string
+      description: >
+        The complete CVE_LOOKUP question for /cve, including the CVE identifier
+        and every requested fact. Preserve the question verbatim rather than
+        reducing it to the identifier.
 
 output_schema:
   type: object
@@ -282,6 +296,16 @@ output_schema:
     from_date: { type: [string, 'null'] }
     to_date: { type: [string, 'null'] }
     sort: { type: [string, 'null'] }
+    # /cve
+    cve_id: { type: string }
+    severity: { type: [string, 'null'] }
+    cvss_score: { type: [number, 'null'] }
+    cvss_version: { type: [string, 'null'] }
+    cvss_scores: { type: array }
+    affected_versions: { type: array }
+    known_exploitation:
+      type: string
+      enum: [active, proof_of_concept, not_reported]
 
 semantics:
   signal_mapping:
@@ -298,3 +322,4 @@ semantics:
     - CURRENCY_EXCHANGE
     - IP_GEOLOCATION
     - ACADEMIC_SEARCH
+    - CVE_LOOKUP

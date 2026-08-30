@@ -91,6 +91,7 @@ const INTENT_ENDPOINTS: Record<string, string> = {
   IP_GEOLOCATION: '/ip-geolocation',
   STOCK_PRICE: '/stock-price',
   ACADEMIC_SEARCH: '/papers',
+  CVE_LOOKUP: '/cve',
 };
 const paths = new Set(
   endpoints.map((endpointValue) => record(endpointValue, 'endpoint').path as string),
@@ -100,6 +101,27 @@ for (const intent of supported as string[]) {
   if (!expected) throw new Error(`intent ${intent} has no endpoint mapping in this validator`);
   if (!paths.has(expected))
     throw new Error(`intent ${intent} is declared but endpoint ${expected} is missing`);
+}
+
+// The production host is a single Vercel function behind explicit rewrites.
+// A manifest-only endpoint works locally but returns 404 after deployment, so
+// verify that every advertised external path reaches the function as part of
+// the same config gate.
+const vercel = record(JSON.parse(await readFile('vercel.json', 'utf8')), 'vercel.json');
+if (!Array.isArray(vercel.rewrites)) throw new Error('vercel.json.rewrites must be an array');
+const rewrites = new Set(
+  vercel.rewrites.map((value, index) => {
+    const rewrite = record(value, `vercel.json.rewrites[${index}]`);
+    if (typeof rewrite.source !== 'string' || typeof rewrite.destination !== 'string')
+      throw new Error(`vercel.json.rewrites[${index}] needs string source and destination`);
+    return rewrite.source;
+  }),
+);
+for (const [index, endpointValue] of endpoints.entries()) {
+  const endpoint = record(endpointValue, `endpoints[${index}]`);
+  const externalPath = endpoint.external_path as string;
+  if (!rewrites.has(externalPath))
+    throw new Error(`endpoint ${externalPath} is advertised but missing from vercel.json rewrites`);
 }
 
 const mapping = record(semantics.signal_mapping, 'semantics.signal_mapping');

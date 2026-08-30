@@ -138,6 +138,7 @@ describe('HTTP miner', () => {
       '/ip-geolocation',
       '/stock-price',
       '/papers',
+      '/cve',
     ];
     const malformed = await Promise.all(paths.map((path) => raw('POST', path, '{')));
     for (const response of malformed) {
@@ -168,6 +169,7 @@ describe('HTTP miner', () => {
       '/ip-geolocation',
       '/stock-price',
       '/papers',
+      '/cve',
     ];
     const missing = await Promise.all(missingPaths.map((path) => get(path)));
     for (const response of missing) {
@@ -269,6 +271,25 @@ describe('HTTP miner', () => {
     expect(byTopic.status).toBe(200);
     expect(byTopic.body.verdict).toBe('found');
     expectCleanReason(byTopic.body);
+  });
+
+  it('serves a CVE answer from an identifier or a full question', async () => {
+    const question = encodeURIComponent(
+      'What is the CVSS score and affected versions for CVE-2021-44228?',
+    );
+    const byQuestion = await get(`/cve?cve_query=${question}`);
+    expect(byQuestion.status).toBe(200);
+    expect(byQuestion.body.verdict).toBe('found');
+    expect(byQuestion.body.cve_id).toBe('CVE-2021-44228');
+    expect(byQuestion.body.cvss_score).toBe(10);
+    expect(String(byQuestion.body.reason)).toMatch(/affected versions/i);
+    expectCleanReason(byQuestion.body);
+
+    const byId = await get('/cve?cve_id=CVE-2026-0300');
+    expect(byId.status).toBe(200);
+    expect(byId.body.verdict).toBe('found');
+    expect(String(byId.body.reason)).toContain('Active limited exploitation');
+    expectCleanReason(byId.body);
   });
 });
 
