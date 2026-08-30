@@ -316,3 +316,28 @@ intent you are winning.
   archived truth pairs. Do not tune their prose unless new ground truths become
   available; only fix defects independently provable from HTTP or factual
   behavior.
+
+---
+
+## 9. Final preflight state (registration 376)
+
+Registration **376** became active on August 30, 2026 with the eight protected
+intents above plus `ACADEMIC_SEARCH`. Transaction:
+`0x790a38893240cb41dab7f0be8bf99443e27c8a00b7bf824c1f25dbcfdcbdd05d`.
+The registered manifest hash and the production `/miner.yaml` hash are both
+`75256b90de4e7813fdd19e48118b8793e2c3a02debb6f561fea797f19c7a8f9d`.
+
+`ACADEMIC_SEARCH` was the only new intent that cleared the evidence bar. The
+incumbent won all three epochs in which it appeared. PREFLIGHT's independently
+implemented OpenAlex endpoint returned the exact same paper-title sets on four
+recovered real questions (10/10, 10/10, 5/5 and 10/10), and its score divided
+by the incumbent's score was 1.001153, 1.000344, 0.998814 and 0.997138. There
+is no archived ACADEMIC_SEARCH receipt corpus, so these are matchup probes, not
+a claimed robust mean.
+
+The endpoint is isolated at `/papers`; none of the existing answer builders
+changed. Full robust replay immediately before registration reproduced the
+protected results above (latest CRYPTO_PRICE mean 0.0442, still 18/28), and the
+post-deploy production gate passed all 22 checks. Do not issue another manifest
+sync merely to tidy metadata: registration 376 is active with all nine intended
+canonical intents and no rejection reason.
