@@ -13,7 +13,8 @@ description: >
   lookup read directly from public JSON-RPC across Ethereum, Base, Arbitrum,
   OP Mainnet and Polygon, with EIP-7702 delegated accounts reported correctly.
   Total value locked and cryptocurrency spot prices are mirrored from
-  DefiLlama.
+  DefiLlama. Academic paper searches use OpenAlex and preserve requested
+  publication windows, result counts and ordering.
 base_url: https://preflight-ssl-verification.vercel.app
 
 docs:
@@ -94,6 +95,13 @@ endpoints:
     description: >
       Current equity quote by ticker or company name, with the previous close,
       the day's change and the listing venue.
+  - path: /papers
+    external_path: /papers
+    method: GET
+    description: >
+      Peer-reviewed papers for a research question, optionally constrained by
+      publication dates, result count and citation or recency ordering, from
+      OpenAlex.
 
 input_schema:
   type: object
@@ -138,6 +146,13 @@ input_schema:
     symbol:
       type: string
       description: Equity ticker or company name. Used by /stock-price.
+    topic:
+      type: string
+      description: >
+        The complete ACADEMIC_SEARCH question for /papers, including the
+        research subject and any publication dates, result count, field
+        constraints or requested ordering. Preserve the question verbatim
+        rather than reducing it to keywords.
 
 output_schema:
   type: object
@@ -260,6 +275,13 @@ output_schema:
     price_formatted: { type: [string, 'null'] }
     observed_at: { type: [string, 'null'] }
     source_confidence: { type: [number, 'null'] }
+    # /papers
+    topic: { type: string }
+    papers: { type: array }
+    result_count: { type: integer }
+    from_date: { type: [string, 'null'] }
+    to_date: { type: [string, 'null'] }
+    sort: { type: [string, 'null'] }
 
 semantics:
   signal_mapping:
@@ -275,3 +297,4 @@ semantics:
     - CRYPTO_PRICE
     - CURRENCY_EXCHANGE
     - IP_GEOLOCATION
+    - ACADEMIC_SEARCH

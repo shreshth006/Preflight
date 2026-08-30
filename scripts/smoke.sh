@@ -36,6 +36,7 @@ CASES=(
   "ip-geolocation|ip=8.8.8.8|found"
   "ip-geolocation|ip=192.168.1.1|not_found"
   "stock-price|symbol=AAPL|found"
+  "papers|topic=zero%20knowledge%20proofs|found"
 )
 
 failures=0
