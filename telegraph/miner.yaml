@@ -269,7 +269,6 @@ semantics:
   supported_intents:
     - SSL_VERIFICATION
     - URL_SCAN
-    - GAS_PRICE
     - WALLET_BALANCE_CHECK
     - ONCHAIN_TX_LOOKUP
     - TVL_LOOKUP
