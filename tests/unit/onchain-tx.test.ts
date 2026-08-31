@@ -82,4 +82,25 @@ describe('transaction outcome accuracy', () => {
     expect(result.reason).toMatch(/RPC endpoint failed to answer/i);
     expect(result.reason).not.toMatch(/^No transaction/);
   });
+
+  it('answers a confirmed absence with the concise live-winning sentence', async () => {
+    vi.stubGlobal('fetch', (_input: string | URL | Request, init?: RequestInit) => {
+      if (typeof init?.body !== 'string') throw new TypeError('expected a string RPC request body');
+      const request = JSON.parse(init.body) as { method: string };
+      const result = request.method === 'eth_blockNumber' ? '0x64' : null;
+      return Promise.resolve(
+        new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    });
+
+    const result = await lookupTransaction(HASH, CHAIN);
+    expect(result.verdict).toBe('not_found');
+    expect(result.reason).toBe(
+      `No transaction with hash ${HASH} was found on Test Chain; it does not exist on-chain and ` +
+        'cannot be confirmed successful.',
+    );
+  });
 });

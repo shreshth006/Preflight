@@ -106,10 +106,8 @@ export async function lookupTransaction(
       fee_native: null,
       nonce: null,
       reason: transactionLookupAnswered
-        ? `No transaction with hash ${normalized} was found on ${chain.name} (chain ID ` +
-          `${chain.chainId}). The hash is well formed, so it either belongs to a different ` +
-          `chain, has not yet propagated to the queried node, or was never broadcast. ` +
-          `Nothing can be reported about its status, sender, recipient or effect.`
+        ? `No transaction with hash ${normalized} was found on ${chain.name}; it does not ` +
+          'exist on-chain and cannot be confirmed successful.'
         : `Transaction ${normalized} could not be looked up on ${chain.name} because every ` +
           `configured RPC endpoint failed to answer. Its existence and status are unknown, ` +
           `so it is reported as unavailable rather than not found.`,
