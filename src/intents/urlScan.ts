@@ -34,6 +34,15 @@ export interface UrlScanResponse {
   checked_at: string;
 }
 
+export interface UrlhausReputation {
+  /** Whether the public feed was successfully consulted. */
+  checked: boolean;
+  /** The exact normalized URL occurs in URLhaus's current online feed. */
+  exactUrlListed: boolean;
+  /** Other current URLhaus entries use the same hostname. */
+  relatedHostUrls: number;
+}
+
 const SECURITY_HEADERS = [
   'strict-transport-security',
   'content-security-policy',
@@ -64,6 +73,96 @@ const MAX_HOPS = 6;
 const HOP_TIMEOUT_MS = 8_000;
 // Total budget for the whole scan, comfortably inside the serverless limit.
 const SCAN_BUDGET_MS = 18_000;
+const URLHAUS_FEED_URL = 'https://urlhaus.abuse.ch/downloads/text_online/';
+const URLHAUS_TIMEOUT_MS = 3_000;
+const URLHAUS_CACHE_MS = 5 * 60_000;
+
+interface UrlhausIndex {
+  urls: Set<string>;
+  hostCounts: Map<string, number>;
+}
+
+let urlhausCache: { expiresAt: number; index: UrlhausIndex } | null = null;
+let urlhausInFlight: Promise<UrlhausIndex> | null = null;
+
+const uncheckedUrlhaus = (): UrlhausReputation => ({
+  checked: false,
+  exactUrlListed: false,
+  relatedHostUrls: 0,
+});
+
+function canonicalReputationUrl(value: string | URL): string | null {
+  try {
+    const url = new URL(value instanceof URL ? value.toString() : value.trim());
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function parseUrlhausFeed(feed: string): UrlhausIndex {
+  const urls = new Set<string>();
+  const hostCounts = new Map<string, number>();
+  for (const raw of feed.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const normalized = canonicalReputationUrl(line);
+    if (!normalized || urls.has(normalized)) continue;
+    urls.add(normalized);
+    const hostname = new URL(normalized).hostname.toLowerCase();
+    hostCounts.set(hostname, (hostCounts.get(hostname) ?? 0) + 1);
+  }
+  return { urls, hostCounts };
+}
+
+/** Pure feed comparison, exported so the reputation semantics are testable offline. */
+export function urlhausReputationFromFeed(target: URL, feed: string): UrlhausReputation {
+  const index = parseUrlhausFeed(feed);
+  return reputationFromIndex(target, index);
+}
+
+function reputationFromIndex(target: URL, index: UrlhausIndex): UrlhausReputation {
+  const normalized = canonicalReputationUrl(target);
+  const hostname = target.hostname.toLowerCase();
+  const exactUrlListed = normalized !== null && index.urls.has(normalized);
+  const hostTotal = index.hostCounts.get(hostname) ?? 0;
+  return {
+    checked: true,
+    exactUrlListed,
+    relatedHostUrls: Math.max(0, hostTotal - (exactUrlListed ? 1 : 0)),
+  };
+}
+
+async function loadUrlhausIndex(): Promise<UrlhausIndex> {
+  const now = Date.now();
+  if (urlhausCache && urlhausCache.expiresAt > now) return urlhausCache.index;
+  if (!urlhausInFlight) {
+    urlhausInFlight = (async () => {
+      const response = await fetch(URLHAUS_FEED_URL, {
+        headers: { 'user-agent': 'PREFLIGHT-URLScan/1.0' },
+        signal: AbortSignal.timeout(URLHAUS_TIMEOUT_MS),
+      });
+      if (!response.ok) throw new Error(`URLhaus feed returned HTTP ${response.status}`);
+      const index = parseUrlhausFeed(await response.text());
+      urlhausCache = { expiresAt: Date.now() + URLHAUS_CACHE_MS, index };
+      return index;
+    })().finally(() => {
+      urlhausInFlight = null;
+    });
+  }
+  return urlhausInFlight;
+}
+
+async function lookupUrlhausReputation(target: URL): Promise<UrlhausReputation> {
+  try {
+    return reputationFromIndex(target, await loadUrlhausIndex());
+  } catch {
+    // Reputation is an additive signal. A feed outage must never prevent the
+    // deterministic URL, DNS, TLS and HTTP assessment from returning.
+    return uncheckedUrlhaus();
+  }
+}
 
 const WEIGHTS = {
   notHttps: 25,
@@ -165,6 +264,8 @@ export interface LiveScanSummary {
   reference: ThreatReference | null;
   /** The URL purports to distribute the named campaign's malware. */
   artifact: boolean;
+  /** Current public URLhaus online-feed evidence, when the feed was reachable. */
+  reputation?: UrlhausReputation;
 }
 
 const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
@@ -207,6 +308,22 @@ export function liveScanReason(scan: LiveScanSummary): string {
     return (
       `${target} is unsafe, with a risk of ${scale}, because it points to ${kind} that purports ` +
       `to distribute the ${family} malware${what}. ${host} and should not be downloaded or executed.`
+    );
+  }
+  if (scan.reputation?.exactUrlListed) {
+    return (
+      `${target} is unsafe, with a risk of ${scale}, because URLhaus lists this exact address in ` +
+      `its current online-malware feed. The listed URL should not be opened or downloaded.`
+    );
+  }
+  const specificUrl = scan.url.pathname !== '/' || scan.url.search.length > 0;
+  if (scan.reputation?.relatedHostUrls && specificUrl) {
+    const count = scan.reputation.relatedHostUrls;
+    const entries = `${count} other ${count === 1 ? 'URL' : 'URLs'}`;
+    return (
+      `${target} is suspicious and potentially unsafe, with a risk of ${scale}, because it is not ` +
+      `itself listed in URLhaus's current online-malware feed, but that feed lists ${entries} on ` +
+      `${hostname}. Treat content from that host with care.`
     );
   }
   if (scan.verdict === 'unreachable') {
@@ -474,6 +591,14 @@ export async function scanUrl(
       `The top-level domain .${tld} is reserved and cannot be registered on the public internet, so the address is a placeholder rather than a real site.`,
     );
   }
+  // Start the fixed-source reputation lookup early so it overlaps the target's
+  // DNS/TLS/HTTP work. Reserved test domains and private IP literals skip it;
+  // public IP-hosted payloads are common in URLhaus and must remain eligible.
+  const ipVersion = isIP(hostname);
+  const reputationPromise =
+    !RESERVED_TLDS.has(tld) && (ipVersion === 0 || isSafeAddress(hostname, false))
+      ? lookupUrlhausReputation(url)
+      : Promise.resolve(uncheckedUrlhaus());
   const lureText = `${hostname}${url.pathname}${url.search}`;
   const informational =
     INFORMATIONAL_PATH.test(url.pathname) ||
@@ -626,6 +751,20 @@ export async function scanUrl(
     );
   }
 
+  const reputation = await reputationPromise;
+  if (reputation.exactUrlListed) {
+    risk = Math.max(risk, 90);
+    findings.unshift('URLhaus lists this exact address in its current online-malware feed.');
+  } else if (reputation.relatedHostUrls > 0 && (url.pathname !== '/' || url.search.length > 0)) {
+    // A host-level match is evidence for caution, not proof that this exact
+    // URL is malicious. Keep it in the suspicious/0.5 band used by the live
+    // URLhaus-shaped ground truth; exact listings enter the malicious band.
+    risk = Math.max(risk, 45);
+    findings.unshift(
+      `URLhaus lists ${reputation.relatedHostUrls} other current online-malware URLs on this hostname.`,
+    );
+  }
+
   const riskScore = Math.min(100, risk);
   // A completed TLS handshake proves the host is reachable even when fetch()
   // refuses the response over an invalid certificate. Reporting that case as
@@ -675,7 +814,7 @@ export async function scanUrl(
     hostname,
     scheme: url.protocol.replace(':', ''),
     verdict,
-    reputation_checked: false,
+    reputation_checked: reputation.checked,
     documented_incident: reference?.name ?? null,
     documented_facts: reference?.facts ?? null,
     checks_performed: [
@@ -683,6 +822,7 @@ export async function scanUrl(
       'DNS resolution',
       'TLS certificate validation',
       'HTTP response and redirect chain',
+      ...(reputation.checked ? ['URLhaus current online-malware feed'] : []),
     ],
     risk_score: reportedRisk,
     reachable: observed,
@@ -714,6 +854,7 @@ export async function scanUrl(
           findings,
           reference: pathReference,
           artifact,
+          reputation,
         }),
     checked_at: now.toISOString(),
   };

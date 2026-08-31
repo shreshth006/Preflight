@@ -7,6 +7,7 @@ import {
   purportedArtifact,
   riskOnUnitScale,
   scanUrl,
+  urlhausReputationFromFeed,
 } from '../../src/intents/urlScan.js';
 import { threatReferenceFor } from '../../src/intents/threatIntel.js';
 
@@ -136,6 +137,79 @@ describe('url scan verdict precedence', () => {
     expect(reason).toBe(
       'The URL https://github.com/mirai-botnet/mirai/releases/tag/v1.0.0 is unsafe, with a risk of 0.9 on a 0 (safe) to 1 (unsafe) scale, because it points to a GitHub release page that purports to distribute the Mirai botnet malware (IoT botnet malware that infects devices through default credentials to launch large-scale DDoS attacks, with source code leaked in 2016). The host github.com is a legitimate platform, but the artifact itself is malware and should not be downloaded or executed.',
     );
+  });
+
+  it('distinguishes an exact URLhaus listing from other listings on the same host', () => {
+    const feed = [
+      '# current online URLs',
+      'http://malware.example/payload.exe',
+      'https://shared.example/first.bin',
+      'https://shared.example/second.bin',
+    ].join('\n');
+
+    expect(urlhausReputationFromFeed(new URL('http://malware.example/payload.exe'), feed)).toEqual({
+      checked: true,
+      exactUrlListed: true,
+      relatedHostUrls: 0,
+    });
+    expect(urlhausReputationFromFeed(new URL('https://shared.example/clean'), feed)).toEqual({
+      checked: true,
+      exactUrlListed: false,
+      relatedHostUrls: 2,
+    });
+    expect(urlhausReputationFromFeed(new URL('https://unlisted.example/'), feed)).toEqual({
+      checked: true,
+      exactUrlListed: false,
+      relatedHostUrls: 0,
+    });
+  });
+
+  it('uses the URLhaus reputation register without changing the malware-artifact register', () => {
+    const related = liveScanReason({
+      url: new URL('https://shared.example/clean'),
+      verdict: 'suspicious',
+      riskScore: 45,
+      tlsValid: true,
+      tlsIssuer: null,
+      resolved: ['203.0.113.1'],
+      findings: [],
+      reference: null,
+      artifact: false,
+      reputation: { checked: true, exactUrlListed: false, relatedHostUrls: 2 },
+    });
+    expect(related).toBe(
+      "The URL https://shared.example/clean is suspicious and potentially unsafe, with a risk of 0.5 on a 0 (safe) to 1 (unsafe) scale, because it is not itself listed in URLhaus's current online-malware feed, but that feed lists 2 other URLs on shared.example. Treat content from that host with care.",
+    );
+
+    const exact = liveScanReason({
+      url: new URL('http://malware.example/payload.exe'),
+      verdict: 'malicious',
+      riskScore: 90,
+      tlsValid: null,
+      tlsIssuer: null,
+      resolved: ['203.0.113.2'],
+      findings: [],
+      reference: null,
+      artifact: false,
+      reputation: { checked: true, exactUrlListed: true, relatedHostUrls: 0 },
+    });
+    expect(exact).toContain('URLhaus lists this exact address');
+    expect(exact).toContain('risk of 0.9 on a 0 (safe) to 1 (unsafe) scale');
+
+    const hostRoot = liveScanReason({
+      url: new URL('https://shared.example/'),
+      verdict: 'safe',
+      riskScore: 0,
+      tlsValid: true,
+      tlsIssuer: null,
+      resolved: ['203.0.113.3'],
+      findings: [],
+      reference: null,
+      artifact: false,
+      reputation: { checked: true, exactUrlListed: false, relatedHostUrls: 2 },
+    });
+    expect(hostRoot).toContain(' is safe, with a risk of 0.1 ');
+    expect(hostRoot).not.toContain('other URLs');
   });
 
   it('keeps a campaign named in an ordinary publisher path as page context, not an artifact', () => {
