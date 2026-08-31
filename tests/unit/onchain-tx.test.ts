@@ -54,6 +54,19 @@ describe('transaction outcome accuracy', () => {
     expect(result.verdict).toBe('success');
   });
 
+  it('leads with the contract-call answer when that is what the question asks', async () => {
+    stubRpc('0x1');
+    const result = await lookupTransaction(
+      HASH,
+      CHAIN,
+      new Date(),
+      `Was transaction ${HASH} a contract call?`,
+    );
+
+    expect(result.reason).toMatch(/^No, it was not a contract call to /);
+    expect(result.reason).toContain('0 TST in native value');
+  });
+
   it('does not call a mined transaction failed when the receipt has no status', async () => {
     stubRpc(undefined);
     const result = await lookupTransaction(HASH, CHAIN);

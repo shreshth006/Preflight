@@ -181,7 +181,12 @@ const INTENT_ROUTES: Record<string, IntentRoute> = {
           'a transaction hash',
           'A lookup needs a 0x-prefixed 32-byte transaction hash.',
         );
-      return lookupTransaction(hash, chainFor(values));
+      return lookupTransaction(
+        hash,
+        chainFor(values),
+        new Date(),
+        values.context() ?? values.text(),
+      );
     },
   },
   '/url-scan': {
