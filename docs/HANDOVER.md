@@ -375,3 +375,15 @@ so node-side activation could not yet be observed. This is not a rejection.
 `https://devnode.telegraphprotocol.com/api/miners/377` when the service
 recovers. The sync script now exits nonzero if the node never reports active,
 instead of silently succeeding after its two-minute polling bound.
+
+## 11. 2026-08-31 autopilot run — see `docs/AUTOPILOT-REPORT-2026-08-31.md`
+
+Measured record of the six-hour autopilot (Fable orchestrator, Opus workers) and the
+continuous Track 2 program that followed. Headlines: epoch 296 settled at PREFLIGHT
+0.8244 (#1 among ≥5-intent miners); epoch 297 first look 0.6266 (#3; field-wide CVE
+zero and ONCHAIN plateau; URL_SCAN still 0.000 under the new prose — input not
+recovered); commit `6d3819e` (URL_SCAN verdict-first prose, archived path untouched)
+and `017d5f5` (deterministic champion loading, `CHAMPIONS_DIR`); registration 377
+unchanged throughout. Track 2: every synth-perfect candidate lost ground on
+independently written corpora — treat the held-out rule in that report as binding.
+Only TEXT_AUTHENTICITY_CHECK v9 was recommended for registration at the time of writing.
