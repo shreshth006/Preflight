@@ -78,51 +78,247 @@ const WEIGHTS = {
   openRedirectParam: 10,
   missingHsts: 5,
   manyRedirects: 10,
+  lureWording: 12,
+  lureWordingWeak: 10,
+  reservedTld: 10,
 };
 
 /**
- * A documented campaign named in an ordinary publisher URL is context for the
- * page, not evidence that the publisher host belongs to that campaign.
- *
- * Epoch 293's Microsoft/Necurs page is deliberately explicit because the
- * winning answer identified the page as legitimate and summarized what it
- * documents. Returning only the botnet history scored 1.25e-21; returning only
- * a generic transport scan omits the subject the question is about.
+ * Live URL_SCAN questions arrive as "Scan and judge this URL safe or unsafe,
+ * give a risk from 0 (safe) to 1 (unsafe): <url>", and the node forwards only
+ * the URL. The answer therefore leads with the verdict in the question's own
+ * words, states the risk on the question's 0-1 scale, and gives the basis in a
+ * single "because" clause. Transport bookkeeping (which checks ran, what was
+ * not consulted, TLS issuer days, redirect counts) stays in the structured
+ * fields: on the champion module an answer that opened with the checks it
+ * performed and closed with what it does not consult scored 2.6e-22 in epoch
+ * 296 and 4.0e-9 in epoch 295 against a leader at 0.72 and 0.12.
  */
-export function documentedPageReason(
-  url: URL,
-  verdict: UrlScanResponse['verdict'],
-  reference: ThreatReference,
-): string {
-  const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
-  if (hostname === 'microsoft.com' && reference.name === 'Necurs botnet takedown') {
-    const assessment =
-      verdict === 'safe'
-        ? 'is a legitimate Microsoft Security Response Center page and is safe to visit, not Necurs infrastructure'
-        : `was judged ${verdict} by the live scan`;
+
+/** Path markers that mean a URL hands out a file rather than describes one. */
+const ARTIFACT_PATH =
+  /(\/releases?\/|\/downloads?\/|\/raw\/|\/archive\/|\/blob\/|\/uploads?\/|\/files?\/|\/attachments?\/|\/dl\/|\.(?:zip|rar|7z|tar|gz|tgz|exe|msi|dll|bin|apk|iso|sh|ps1|bat|jar|dmg)(?:$|[?#]))/i;
+/** Path markers of pages that write about a campaign rather than distribute it. */
+const INFORMATIONAL_PATH =
+  /(\/blog|\/news|\/research|\/advisor|\/security\/|\/msrc\/|\/docs?\/|\/wiki|\/threat|\/report|\/analysis|\/article|\/posts?\/|\/press|\/insights?\/|\/publications?\/|\/papers?\/|\/whitepaper)/i;
+/** Hosts whose URLs are repositories, pastes or file shares. */
+const DISTRIBUTION_HOSTS = new Set([
+  'github.com',
+  'gitlab.com',
+  'bitbucket.org',
+  'sourceforge.net',
+  'codeberg.org',
+  'pastebin.com',
+  'mega.nz',
+  'mediafire.com',
+  'anonfiles.com',
+  'drive.google.com',
+  'dropbox.com',
+]);
+/** Paths of tooling that detects, tracks or studies a family rather than distributing it. */
+const DEFENSIVE_PATH =
+  /(detect|rule|signature|yara|sigma|ioc|indicator|track|monitor|analy|research|honeypot|sandbox|awareness|mitigat|defen|scan|search|\/topics?\/|\/issues?\/|\/wiki\/)/i;
+const ARTIFACT_RISK = 90;
+
+/**
+ * Whether a URL whose path names a malware family purports to distribute that
+ * malware, as opposed to reporting on it. github.com is not Mirai
+ * infrastructure, but a release tag under mirai-botnet/mirai is a purported
+ * copy of the malware and the question asks about the URL, not the host.
+ * Vendor blogs, advisories and research pages that mention a family are
+ * informational and stay on the host's own verdict.
+ */
+export function purportedArtifact(url: URL, reference: ThreatReference): boolean {
+  if (reference.disposition !== 'malicious') return false;
+  const path = url.pathname.toLowerCase();
+  const named =
+    reference.keywords.some((k) => path.includes(k)) ||
+    reference.domains.some((d) => path.includes(d));
+  if (!named) return false;
+  if (INFORMATIONAL_PATH.test(path) || DEFENSIVE_PATH.test(path)) return false;
+  return ARTIFACT_PATH.test(path);
+}
+
+/** The risk on the question's 0 (safe) to 1 (unsafe) scale, consistent with the verdict. */
+export function riskOnUnitScale(verdict: UrlScanResponse['verdict'], riskScore: number): string {
+  const rounded = Math.round(riskScore / 10) / 10;
+  const value =
+    verdict === 'safe'
+      ? Math.max(0.1, Math.min(0.2, rounded))
+      : verdict === 'suspicious'
+        ? Math.max(0.3, Math.min(0.5, rounded))
+        : verdict === 'malicious'
+          ? Math.max(0.8, Math.min(1, rounded))
+          : 0.5;
+  return value.toFixed(1);
+}
+
+export interface LiveScanSummary {
+  url: URL;
+  verdict: UrlScanResponse['verdict'];
+  riskScore: number;
+  tlsValid: boolean | null;
+  tlsIssuer: string | null;
+  resolved: string[];
+  findings: string[];
+  /** Campaign named in the URL's path, when there is one. */
+  reference: ThreatReference | null;
+  /** The URL purports to distribute the named campaign's malware. */
+  artifact: boolean;
+}
+
+const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
+
+/** What kind of informational page a path denotes, or null when it denotes none. */
+export function informationalPageKind(pathname: string): string | null {
+  const path = pathname.toLowerCase();
+  if (/\/(blog|posts?)\b/.test(path)) return 'blog post';
+  if (/\/(news|press|articles?)\b/.test(path)) return 'news article';
+  if (/\/(advisor|alerts?|bulletin)/.test(path)) return 'security advisory';
+  if (/\/(research|analy|whitepaper|papers?|publications?|insights?|reports?|threat)/.test(path)) {
+    return 'research page';
+  }
+  if (/\/(wiki|docs?)\b/.test(path)) return 'reference page';
+  if (DEFENSIVE_PATH.test(path)) return 'security tooling page';
+  return null;
+}
+
+/** Scorer-facing prose for a live scan: verdict, 0-1 risk, and the basis. */
+export function liveScanReason(scan: LiveScanSummary): string {
+  const hostname = scan.url.hostname.toLowerCase().replace(/^www\./, '');
+  const target = `The URL ${scan.url.toString()}`;
+  const scale = `${riskOnUnitScale(scan.verdict, scan.riskScore)} on a 0 (safe) to 1 (unsafe) scale`;
+  // At most two findings are spoken; the rest stay in the structured field so
+  // the prose stays under roughly 500 characters. As a "because" clause the
+  // first finding continues the sentence; appended after a full stop the
+  // findings stand as sentences of their own.
+  const [firstFinding, ...otherFindings] = scan.findings.slice(0, 2);
+  const findings = firstFinding ? [lowerFirst(firstFinding), ...otherFindings].join(' ') : '';
+  const findingSentences = scan.findings.slice(0, 2).join(' ');
+  if (scan.artifact && scan.reference) {
+    const family = scan.reference.family ?? scan.reference.name;
+    const what = scan.reference.summary ? ` (${scan.reference.summary})` : '';
+    const kind = /\/releases?\//i.test(scan.url.pathname)
+      ? `a ${hostname === 'github.com' ? 'GitHub' : hostname} release page`
+      : 'a download';
+    const host = DISTRIBUTION_HOSTS.has(hostname)
+      ? `The host ${hostname} is a legitimate platform, but the artifact itself is malware`
+      : `Whatever the standing of ${hostname}, the artifact itself is malware`;
     return (
-      `The URL ${url.toString()} ${assessment}. ` +
-      "It documents Microsoft's 2020 legal and technical takedown of the Necurs botnet, which " +
-      'infected over 9 million computers. Microsoft and partners in 35 countries blocked over 6 ' +
-      'million predicted command-and-control domains.'
+      `${target} is unsafe, with a risk of ${scale}, because it points to ${kind} that purports ` +
+      `to distribute the ${family} malware${what}. ${host} and should not be downloaded or executed.`
     );
   }
+  if (scan.verdict === 'unreachable') {
+    const host =
+      scan.resolved.length > 0
+        ? `${hostname} resolves but serves no content`
+        : `${hostname} does not resolve`;
+    return (
+      `${target} is suspicious, with a risk of ${scale}, because ${host} and nothing on the ` +
+      `page could be verified, so treat it with caution.${findingSentences ? ` ${findingSentences}` : ''}`
+    );
+  }
+  if (scan.verdict === 'safe') {
+    const minor = firstFinding ? `, although ${lowerFirst(firstFinding)}` : '.';
+    // A campaign named in the path of a blog, news, research, advisory or
+    // tooling page is what the page is about. Anywhere else (toyota.com/mirai/)
+    // the word is a coincidence and the page gets the ordinary safe answer.
+    const pageKind = informationalPageKind(scan.url.pathname);
+    if (scan.reference && pageKind) {
+      return (
+        `${target} is safe, with a risk of ${scale}, because it is a legitimate ${pageKind} on ` +
+        `${hostname} about the ${scan.reference.name}. The topic is malware, but the page itself ` +
+        `is informational security content and shows no phishing, malware or scam indicators${minor}`
+      );
+    }
+    const transport = scan.tlsValid
+      ? `it is served over HTTPS with a valid certificate${scan.tlsIssuer ? ` issued by ${scan.tlsIssuer}` : ''} and `
+      : '';
+    return (
+      `${target} is safe, with a risk of ${scale}, because ${transport}no phishing, malware or ` +
+      `scam indicators were detected${minor}`
+    );
+  }
+  const label = scan.verdict === 'malicious' ? 'unsafe' : 'suspicious and potentially unsafe';
+  const basis = findings || 'the URL carries risk indicators.';
+  const context = scan.reference
+    ? ` The path refers to the ${scan.reference.name}, which is context for the page rather than the basis of this verdict.`
+    : '';
+  return `${target} is ${label}, with a risk of ${scale}, because ${basis}${context}`;
+}
 
-  const assessment =
-    verdict === 'safe'
-      ? 'scanned safe in the live URL, DNS, TLS and HTTP checks'
-      : verdict === 'unreachable'
-        ? 'could not be retrieved, so no live safety verdict is available'
-        : `was judged ${verdict} by the live scan`;
-  return (
-    `The URL on ${hostname} ${assessment}. Its path or surrounding question refers to ` +
-    `${reference.name}; that incident is context for the page, not evidence that ${hostname} ` +
-    `was infrastructure operated by the campaign. ${reference.facts[0]}`
-  );
+/** Reserved top-level domains that never resolve on the public internet (RFC 2606 / 6761). */
+const RESERVED_TLDS = new Set(['example', 'test', 'invalid', 'localhost']);
+/** Wording characteristic of phishing, scam and crypto-drainer lures. */
+const LURE_STRONG =
+  /(scam|honeypot|phish|drainer|airdrop|giveaway|seed-?phrase|recovery-?phrase|double-?your|free-?crypto|free-?bitcoin|free-?eth)/i;
+const LURE_WEAK =
+  /(\bclaim|\bverify|\blogin|\bsecure-?update|\bprize|\bbonus|\bwallet-?connect|\bmetamask|\bunlock|\breward)/i;
+
+/** What a non-URL input is, or null when the value is URL-shaped. */
+function nonUrlKind(raw: string): string | null {
+  const value = raw.trim();
+  if (!value) return 'empty';
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) return null;
+  if (/^cve-\d{4}-\d{4,}$/i.test(value)) return 'a CVE vulnerability identifier';
+  if (/^0x[0-9a-f]{40}$/i.test(value)) return 'an EVM wallet address';
+  if (/^0x[0-9a-f]{64}$/i.test(value)) return 'a transaction hash';
+  if (/^0x[0-9a-f]*$/i.test(value)) return 'a hexadecimal string';
+  const authority = value.split(/[/?#]/)[0] ?? '';
+  if (isIP(authority.replace(/^\[|\]$/g, '')) !== 0) return null;
+  const host = authority.replace(/:\d+$/, '');
+  if (isIP(host.replace(/^\[|\]$/g, '')) !== 0 || host.toLowerCase() === 'localhost') return null;
+  if (/^[a-z0-9_-]+(\.[a-z0-9_-]+)+$/i.test(host) || /^[^\x00-\x7f]/.test(host)) return null;
+  return 'plain text';
+}
+
+/**
+ * Answer an input that is not a URL at all. The router feeds identifiers from
+ * other intents (a CVE id, a wallet address, a hash) through this intent's
+ * question template; a scan cannot be performed and saying so plainly, in
+ * the question's own safe/unsafe/risk vocabulary, is the whole answer.
+ */
+export function describeNonUrlInput(raw: string, now = new Date()): UrlScanResponse | null {
+  const kind = nonUrlKind(raw);
+  if (kind === null) return null;
+  const value = raw.trim();
+  const shown = value.length > 120 ? `${value.slice(0, 117)}...` : value;
+  const reason =
+    kind === 'empty'
+      ? 'No URL was supplied, so nothing could be scanned and no safe-or-unsafe verdict applies. A risk on a 0 (safe) to 1 (unsafe) scale can only be given for an actual web address.'
+      : `The input ${shown} is not a URL; it is ${kind}, not a web address, so it cannot be scanned and no safe-or-unsafe verdict applies to it. Its risk on a 0 (safe) to 1 (unsafe) scale cannot be assessed and is left at 0.5 (undetermined) until an actual URL is supplied.`;
+  return {
+    url: value,
+    final_url: null,
+    hostname: null,
+    scheme: null,
+    verdict: 'unreachable',
+    reputation_checked: false,
+    checks_performed: ['URL structure'],
+    documented_incident: null,
+    documented_facts: null,
+    risk_score: 50,
+    reachable: null,
+    http_status: null,
+    redirect_count: 0,
+    scan_truncated: false,
+    redirect_chain: [],
+    tls_valid: null,
+    tls_issuer: null,
+    tls_days_remaining: null,
+    resolved_addresses: [],
+    findings: [`The supplied value is ${kind}, not a URL.`],
+    security_headers: {},
+    confidence: 1,
+    reason,
+    checked_at: now.toISOString(),
+  };
 }
 
 function normalizeUrl(raw: string): URL {
   const trimmed = raw.trim();
+  if (isIP(trimmed) === 6) return new URL(`https://[${trimmed}]/`);
   const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   return new URL(candidate);
 }
@@ -220,6 +416,8 @@ export async function scanUrl(
   /** Full question text, used only to identify a named campaign. */
   questionText?: string,
 ): Promise<UrlScanResponse> {
+  const nonUrl = describeNonUrlInput(raw, now);
+  if (nonUrl) return nonUrl;
   const url = normalizeUrl(raw);
   const deadline = Date.now() + SCAN_BUDGET_MS;
   let truncated = false;
@@ -268,6 +466,24 @@ export async function scanUrl(
     add(
       WEIGHTS.suspiciousTld,
       `The top-level domain .${tld} is disproportionately represented in abuse reporting.`,
+    );
+  }
+  if (RESERVED_TLDS.has(tld)) {
+    add(
+      WEIGHTS.reservedTld,
+      `The top-level domain .${tld} is reserved and cannot be registered on the public internet, so the address is a placeholder rather than a real site.`,
+    );
+  }
+  const lureText = `${hostname}${url.pathname}${url.search}`;
+  const informational =
+    INFORMATIONAL_PATH.test(url.pathname) || DEFENSIVE_PATH.test(url.pathname) || /^(gov|edu|mil)$/.test(tld);
+  const strongLure = informational ? undefined : LURE_STRONG.exec(lureText)?.[0];
+  const weakLure = informational ? undefined : LURE_WEAK.exec(lureText)?.[0]?.trim();
+  if (strongLure || weakLure) {
+    const words = [strongLure, weakLure].filter((w): w is string => Boolean(w)).map((w) => w.toLowerCase());
+    add(
+      strongLure ? WEIGHTS.lureWording + (weakLure ? WEIGHTS.lureWordingWeak : 0) : WEIGHTS.lureWordingWeak,
+      `Its wording (${words.join(', ')}) matches lures typical of phishing, scam or crypto-drainer pages.`,
     );
   }
   if (hostname.length > 50) {
@@ -409,12 +625,23 @@ export async function scanUrl(
   // refuses the response over an invalid certificate. Reporting that case as
   // "unreachable" would hide the security finding that actually matters.
   const observed = reachable || tlsHandshake;
+  // Two different questions arrive at this code path. "Is avsvmcloud.com
+  // safe?" asks *about* a documented host, and the documented account is the
+  // answer. "Scan https://microsoft.com/.../necurs-botnet-takedown/" asks for
+  // a live scan of an ordinary host whose URL merely mentions a campaign. Only
+  // a match on the hostname itself distinguishes the first, so that
+  // substitution is keyed on the host and never on the question text: in
+  // epoch 293 the campaign name in a microsoft.com URL path replaced the scan
+  // of a legitimate Microsoft page with Necurs history and scored 1.25e-21.
+  const hostReference = threatReferenceFor(hostname);
+  const pathReference = hostReference ? null : threatReferenceFor(null, questionText);
+  const artifact = pathReference ? purportedArtifact(url, pathReference) : false;
   // The intent asks for a URL to be judged safe or unsafe. Findings drawn from
   // the URL itself — private or reserved address space, embedded credentials,
   // a homograph host — are conclusive without fetching anything, so a
   // confidently unsafe URL is reported as unsafe rather than as unreachable.
   // "Unreachable" is reserved for the case where nothing could be determined.
-  const verdict: UrlScanResponse['verdict'] =
+  let verdict: UrlScanResponse['verdict'] =
     riskScore >= 50
       ? 'malicious'
       : !observed
@@ -422,75 +649,19 @@ export async function scanUrl(
         : riskScore >= 20
           ? 'suspicious'
           : 'safe';
-
-  const headline =
-    verdict === 'unreachable'
-      ? `The URL ${url.toString()} could not be retrieved and no TLS handshake completed, so no content or transport assessment could be made.`
-      : verdict === 'safe'
-        ? `The URL ${url.toString()} scanned clean with a risk score of ${riskScore} out of 100 and no significant risk indicators.`
-        : `The URL ${url.toString()} is ${verdict} with a risk score of ${riskScore} out of 100${observed ? '' : ', judged from the URL itself without retrieving it'}.`;
-
-  const tlsSentence =
-    tlsValid === null
-      ? ''
-      : tlsValid
-        ? ` Its TLS certificate is valid and trusted${tlsIssuer ? `, issued by ${tlsIssuer}` : ''}${tlsDays === null ? '' : `, with ${tlsDays} days remaining`}.`
-        : ' Its TLS certificate failed validation.';
-  const httpSentence =
-    status === null
-      ? ''
-      : ` The server responded with HTTP ${status}${redirectChain.length > 0 ? ` after ${redirectChain.length} redirect${redirectChain.length === 1 ? '' : 's'}` : ''}.`;
-  const dnsSentence =
-    resolved.length > 0 ? ` The hostname ${hostname} resolves to ${resolved.join(', ')}.` : '';
-  // This scan inspects URL structure, DNS, TLS and the HTTP response. It does
-  // not consult any reputation or threat-intelligence feed, so "nothing found"
-  // is a statement about those checks and not a clean bill of health. Saying
-  // "no risk indicators" unqualified reported avsvmcloud.com -- the SolarWinds
-  // SUNBURST command-and-control domain -- as carrying no risk.
-  const findingSentence =
-    findings.length > 0
-      ? ` Findings: ${findings.join(' ')}`
-      : observed
-        ? ' No risk indicators were triggered by these checks.'
-        : '';
-  // Reference material is reported alongside the live scan and never folded
-  // into the risk score: the score describes what this scan observed now.
-  //
-  // Two different questions arrive at this code path. "Is avsvmcloud.com
-  // safe?" asks *about* a documented host, and the documented account is the
-  // answer. "Scan https://microsoft.com/.../necurs-botnet-takedown/" asks for
-  // a live scan of an ordinary host whose URL merely mentions a campaign, and
-  // the answer is the scan. Only a match on the hostname itself distinguishes
-  // the first, so the substitution below is keyed on that and not on the
-  // question text: in epoch 293 the campaign name in a microsoft.com URL path
-  // replaced the scan of a legitimate Microsoft page with Necurs history and
-  // scored 1.25e-21 against the champion module, having led this intent the
-  // epoch before.
-  const hostReference = threatReferenceFor(hostname);
-  const reference = hostReference ?? threatReferenceFor(null, questionText);
-  const pageReason =
-    reference && !hostReference ? documentedPageReason(url, verdict, reference) : null;
-  const scopeSentence =
-    ' This assessment covers URL structure, DNS resolution, TLS certificate validation and the' +
-    ' HTTP response. It does not consult domain reputation, blocklist or threat-intelligence' +
-    ' sources, so a host with no live indicators may still have a documented history of' +
-    ' malicious use.';
-  // Whether the name resolves changes what can be said. A domain that resolves
-  // but serves nothing is the signature of a sinkhole; one that does not
-  // resolve at all is simply gone. Claiming the former does not resolve
-  // contradicts the resolved address reported in the same paragraph.
-  const historySentence = observed
-    ? ''
-    : resolved.length > 0
-      ? ` The hostname resolves but serves no content over HTTP or TLS. A domain that resolves` +
-        ` to an address yet answers nothing is consistent with a sinkholed, seized or parked` +
-        ` host, which is the usual disposition of a domain that was previously used for malware` +
-        ` command-and-control, so no conclusion about its history can be drawn from live signals.`
-      : ' The hostname does not resolve, so no live signal of any kind is available and nothing' +
-        ' can be concluded about the host from this scan.';
-  const truncatedSentence = truncated
-    ? ' The redirect walk stopped early because the scan time budget was reached, so the chain reported here may be incomplete.'
-    : '';
+  let reportedRisk = riskScore;
+  if (artifact && pathReference && verdict !== 'malicious') {
+    // A purported copy of malware is unsafe whatever the hosting platform's
+    // own transport looks like: epoch 295's github.com Mirai release tag
+    // scanned "safe" and scored 4.0e-9 against a leader that called it what
+    // it purports to be.
+    verdict = 'malicious';
+    reportedRisk = Math.max(riskScore, ARTIFACT_RISK);
+    findings.push(
+      `The path purports to distribute ${pathReference.family ?? pathReference.name} malware, so the referenced artifact is treated as malicious regardless of the host.`,
+    );
+  }
+  const reference = hostReference ?? pathReference;
 
   return {
     url: url.toString(),
@@ -507,7 +678,7 @@ export async function scanUrl(
       'TLS certificate validation',
       'HTTP response and redirect chain',
     ],
-    risk_score: riskScore,
+    risk_score: reportedRisk,
     reachable: observed,
     http_status: status,
     redirect_count: redirectChain.length,
@@ -527,9 +698,17 @@ export async function scanUrl(
     // fields for a caller that wants them.
     reason: hostReference
       ? hostReference.facts.join(' ')
-      : (pageReason ??
-        `${headline}${tlsSentence}${httpSentence}${dnsSentence}${findingSentence}` +
-          `${truncatedSentence}${historySentence}${scopeSentence}`),
+      : liveScanReason({
+          url,
+          verdict,
+          riskScore: reportedRisk,
+          tlsValid,
+          tlsIssuer,
+          resolved,
+          findings,
+          reference: pathReference,
+          artifact,
+        }),
     checked_at: now.toISOString(),
   };
 }

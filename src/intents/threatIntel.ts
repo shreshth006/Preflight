@@ -36,6 +36,10 @@ export interface ThreatReference {
    * it malicious because it appears in a ransomware report would be wrong.
    */
   disposition: 'malicious' | 'safe';
+  /** Short name of the malware family or campaign, for a URL that purports to distribute it. */
+  family?: string;
+  /** One-line, widely reported description of what that malware is and does. */
+  summary?: string;
 }
 
 const REFERENCES: ThreatReference[] = [
@@ -44,6 +48,8 @@ const REFERENCES: ThreatReference[] = [
     keywords: ['sunburst', 'solarwinds', 'solorigate', 'avsvmcloud'],
     name: 'SUNBURST (SolarWinds Orion supply-chain compromise)',
     disposition: 'malicious',
+    family: 'SUNBURST backdoor',
+    summary: 'a backdoor delivered through a trojanized SolarWinds Orion update that gave attackers remote access to victim networks',
     facts: [
       'avsvmcloud.com was the command-and-control domain for the SUNBURST backdoor distributed via a trojanized SolarWinds Orion software update, disclosed by FireEye on December 13, 2020.',
       'The malware used a domain generation algorithm to resolve subdomains of avsvmcloud.com, which returned CNAME records pointing to active command-and-control infrastructure.',
@@ -66,6 +72,8 @@ const REFERENCES: ThreatReference[] = [
     keywords: ['necurs'],
     name: 'Necurs botnet takedown',
     disposition: 'malicious',
+    family: 'Necurs botnet',
+    summary: 'one of the largest spam and malware distribution botnets, which infected more than 9 million computers',
     facts: [
       'On March 10, 2020, Microsoft announced a coordinated legal and technical takedown of the Necurs botnet, which had infected more than 9 million computers globally.',
       "Microsoft analyzed Necurs' domain generation algorithm and predicted over 6 million domains the botnet would have algorithmically generated over the following 25 months, then worked with partners in 35 countries to block them.",
@@ -77,6 +85,8 @@ const REFERENCES: ThreatReference[] = [
     keywords: ['british airways', 'magecart', 'baways'],
     name: 'British Airways Magecart breach',
     disposition: 'malicious',
+    family: 'Magecart skimmer',
+    summary: 'malicious JavaScript that skims payment-card data from checkout pages',
     facts: [
       "In the 2018 British Airways breach, attackers injected malicious JavaScript into the site's Modernizr.js library between August 21 and September 5, 2018.",
       "The script skimmed payment-page form data and exfiltrated it to baways.com, a domain the Magecart-linked attackers registered to mimic British Airways' own branding.",
@@ -88,6 +98,8 @@ const REFERENCES: ThreatReference[] = [
     keywords: ['dnc hack', 'dnc', 'podesta', 'fancy bear', 'apt28', 'google-login', 'google login'],
     name: 'Fake Google-login phishing in the 2016 DNC hack',
     disposition: 'malicious',
+    family: 'Fancy Bear credential-phishing',
+    summary: 'fake Google-login pages used to steal account credentials',
     facts: [
       "CrowdStrike's investigation, later corroborated by SecureWorks' bit.ly analysis, found that the Russian-linked group tracked as Fancy Bear, APT28, Sofacy and TG-4127 sent spear-phishing emails using bit.ly-shortened links to fake Google account-login pages.",
       'The pages harvested credentials from Democratic National Committee and Clinton campaign staff, including chairman John Podesta, between March and May 2016.',
@@ -99,6 +111,8 @@ const REFERENCES: ThreatReference[] = [
     keywords: ['emotet'],
     name: 'Emotet command-and-control infrastructure and takedown',
     disposition: 'malicious',
+    family: 'Emotet',
+    summary: 'a banking trojan turned malware loader spread through malicious email attachments',
     facts: [
       'Emotet operated as a modular loader distributed largely through malicious email attachments, and split its victims across separate botnets, commonly tracked as Epoch 1, Epoch 2 and Epoch 3, each with its own tiered command-and-control servers.',
       'In January 2021 a coordinated action led by Europol and Eurojust, with authorities in the Netherlands, Germany, the United States, the United Kingdom, France, Lithuania, Canada and Ukraine, seized that infrastructure from the inside.',
@@ -121,6 +135,8 @@ const REFERENCES: ThreatReference[] = [
     keywords: ['conficker', 'downadup'],
     name: 'Conficker domain generation algorithm',
     disposition: 'malicious',
+    family: 'Conficker worm',
+    summary: 'a self-propagating worm that infected millions of Windows machines',
     facts: [
       'The Conficker worm, active in 2008 and 2009, used a domain generation algorithm seeded by the current date to locate its command-and-control servers rather than fixed addresses.',
       'The A and B variants generated 250 pseudo-random domains per day across 110 top-level domains, while the Conficker.C variant, active from April 1, 2009, escalated this to 50,000 candidate domains generated daily across 116 top-level domains, of which it would contact 500.',
@@ -132,6 +148,8 @@ const REFERENCES: ThreatReference[] = [
     keywords: ['gameover zeus', 'gameover', 'tovar', 'cryptolocker'],
     name: 'Operation Tovar (Gameover Zeus)',
     disposition: 'malicious',
+    family: 'Gameover Zeus',
+    summary: 'a peer-to-peer banking trojan used for credential theft and CryptoLocker ransomware distribution',
     facts: [
       "In Operation Tovar, executed around May 30, 2014, the FBI, UK's National Crime Agency, Europol and private partners disrupted the peer-to-peer Gameover Zeus botnet.",
       'Gameover Zeus used a fallback domain generation algorithm producing pseudo-random domains as a backup command-and-control channel.',
@@ -143,6 +161,8 @@ const REFERENCES: ThreatReference[] = [
     keywords: ['mirai', 'anna-senpai'],
     name: 'Mirai botnet source code release',
     disposition: 'malicious',
+    family: 'Mirai botnet',
+    summary: 'IoT botnet malware that infects devices through default credentials to launch large-scale DDoS attacks, with source code leaked in 2016',
     facts: [
       "Mirai, the IoT botnet malware behind the record-breaking September 2016 DDoS attacks on Brian Krebs' site and the host OVH, had its source code leaked publicly on Hack Forums by a user calling themselves Anna-senpai on September 30, 2016.",
       'Academic follow-up research, presented at USENIX Security 2017 by Antonakakis and others, traced numerous command-and-control domains associated with post-leak Mirai variant clusters.',
@@ -158,6 +178,12 @@ const REFERENCES: ThreatReference[] = [
  * the question text, so an unrelated domain cannot pick up an entry by
  * coincidence.
  */
+/** Whether a keyword occurs as a whole word (hyphens and punctuation count as boundaries). */
+function wordIn(text: string, keyword: string): boolean {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(text);
+}
+
 export function threatReferenceFor(
   hostname: string | null,
   questionText?: string,
@@ -171,7 +197,7 @@ export function threatReferenceFor(
   const text = (questionText ?? '').toLowerCase();
   if (!text) return null;
   for (const ref of REFERENCES) {
-    if (ref.domains.some((d) => text.includes(d)) || ref.keywords.some((k) => text.includes(k))) {
+    if (ref.domains.some((d) => text.includes(d)) || ref.keywords.some((k) => wordIn(text, k))) {
       return ref;
     }
   }
