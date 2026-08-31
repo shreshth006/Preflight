@@ -124,6 +124,7 @@ export function academicDateWindow(
 
 function stripSearchSyntax(input: string): string {
   return input
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ')
     .replace(/\b[a-z_]+\.search\s*:/gi, ' ')
     .replace(/\[[a-z]+\]/gi, ' ')
     .replace(/\b(?:AND|OR|NOT)\b/g, ' ')

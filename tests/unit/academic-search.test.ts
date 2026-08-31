@@ -70,6 +70,10 @@ describe('academic-search planning', () => {
     ).not.toMatch(/PubMed|\[Mesh\]|\bAND\b/i);
   });
 
+  it('does not echo control characters into a topic or scorer-facing prose', () => {
+    expect(academicTopic('\u0000 quantum\u0007 computing\u0085')).toBe('quantum computing');
+  });
+
   it('builds one coherent plan for a complex request', () => {
     expect(planAcademicSearch(DAY_RANGE_QUESTION)).toMatchObject({
       fromDate: '2025-01-01',
