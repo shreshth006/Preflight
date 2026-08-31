@@ -1,0 +1,344 @@
+PREFLIGHT SIX-HOUR AUTOPILOT — TRACK 1 + TRACK 2
+
+You are operating unattended for the next 5–6 hours. The user will not answer
+questions during that window. Do not finish early merely because one avenue is
+blocked or because the current epoch has not settled. Keep the coordinator and
+useful subagents working until the run deadline, then leave a complete report.
+
+GOVERNING CONTEXT
+
+1. Read docs/CLAUDE-CODE-WIN-MISSION.md completely.
+2. Read docs/HANDOVER.md completely.
+3. Inspect the repository and current git state.
+4. Treat those documents as binding. This prompt adds unattended scheduling and
+   Track 2 fallback behavior; it does not relax their safety rules.
+
+Start by recording:
+
+- UTC and local start time;
+- an explicit run deadline six hours later;
+- current epoch, next_epoch_at, and time_until_next_epoch from
+  https://devnode.telegraphprotocol.com/api/epoch;
+- registration 377 status, manifest hash, and supported intents;
+- current HEAD, origin HEAD, worktree changes, and production deployment.
+
+Do not ask the user routine questions. Make safe reversible assumptions, record
+them, and continue. If one task requires unavailable information, mark that
+task blocked and immediately work the next item in the queue. A blocker in one
+intent is never a blocker for the whole mission.
+
+PERSISTENCE CONTRACT
+
+- Do not voluntarily return a final answer before the six-hour deadline unless
+  every Track 1 and Track 2 research queue below is genuinely exhausted.
+- Use Fable's persistent/loop/resume facility if available. Keep this task alive
+  across ordinary tool timeouts and context compaction.
+- Never use a single blocking sleep longer than five minutes. Poll with bounded
+  waits so the coordinator remains responsive and can process subagent results.
+- Check all running subagents at least every 10–15 minutes. Recycle completed
+  slots into the next bounded task.
+- Before context compaction, usage exhaustion, or any expected interruption,
+  write a concise checkpoint containing current time, epoch, completed work,
+  active agents, uncommitted changes, measurements, and the exact next command.
+- If usage is rate-limited, preserve the checkpoint, calculate the reset time,
+  use Fable's alarm/resume mechanism when available, and resume automatically.
+- Never busy-loop an API. Constant work means continuous useful progress, not
+  abusive polling.
+
+Maintain a running evidence log during the session. It may be a temporary file
+or docs/AUTOPILOT-CHECKPOINT.md, but do not mix speculative notes into
+docs/HANDOVER.md. At the end, produce a clean durable report and remove purely
+temporary artifacts.
+
+ABSOLUTE FREEZE
+
+Registration 377 is the submitted hackathon registration.
+
+NEVER run or call:
+
+- scripts/sync-miner.sh
+- updateMiner
+- registerMiner
+- any manifest-registration transaction
+- any action that retires or replaces registration 377
+
+Do not edit telegraph/miner.yaml or telegraph/registration-id. Do not spend
+funds, submit a scorer registration, change the hackathon submission, or make
+any other irreversible external mutation while the user is absent.
+
+You MAY research, implement, test, commit, and—only after every required gate—
+push isolated CODE-ONLY improvements. A code push may trigger the existing
+Vercel deployment. It must not change the registered manifest. For a newly
+proven intent, build the isolated endpoint and complete decision packet, but
+stop before declaring it on-chain.
+
+Preserve all protected intent outputs. Preserve unrelated tracked and untracked
+user files. Never delete fixtures/live/scored-receipts.json. Never use a
+destructive git reset, checkout, clean, force-push, or broad deletion.
+
+SUBAGENT ORGANIZATION
+
+Use available subagent capacity continuously. The coordinator owns the plan,
+integrates evidence, and is the only agent allowed to edit shared production
+builders, commit, push, or deploy.
+
+Keep these roles filled when useful:
+
+1. TRACK 1 EPOCH FORENSICS
+   Read-only. Monitor epoch timing, collect score arrays, recover hidden inputs
+   from every miner's failure_reason, compare PREFLIGHT with livecert and intent
+   leaders, and map inputs to exact router branches.
+
+2. TRACK 1 INTENT HUNTER
+   Read-only until explicitly reassigned. Inventory every canonical intent,
+   active miner count, eligibility threshold, recent scores, champion WASM,
+   available receipts, endpoint schemas, and candidate deterministic edges.
+
+3. TRACK 1 SCORER/CANDIDATE LAB
+   Validate champion modules, build wording/shape candidates outside production
+   code, score every available question-ground-truth pair, and produce complete
+   per-pair deltas.
+
+4. TRACK 2 CHAMPION HUNTER
+   Survey canonical scorer competitions, recover public corpora, compare current
+   champions, and design scorer candidates that can meet both ordering and
+   separation gates.
+
+5. RED-TEAM/AUDITOR
+   Review accepted candidates for protected regressions, false claims, fixture
+   overfit, malformed prose, transport errors, security problems, manifest
+   drift, and missing verification.
+
+If fewer slots exist, combine compatible read-only roles. Never assign two
+agents to edit the same file. Subagents must return evidence and exact commands,
+not vague recommendations.
+
+DYNAMIC EPOCH SCHEDULER
+
+Do not hardcode an epoch number or boundary. Re-query /api/epoch and adjust the
+plan whenever timing changes.
+
+When more than 90 minutes remain:
+
+- Keep broad Track 1 intent and competitor research running.
+- Run scorer experiments and isolated candidate searches.
+- Use spare capacity on Track 2.
+- Implement only candidates that already have strong distribution-level proof.
+
+When 30–90 minutes remain:
+
+- Finish measurable candidate experiments.
+- Avoid starting broad rewrites.
+- Ensure every accepted edit has enough time for full local gates, deployment,
+  production verification, and rollback before the boundary.
+- Prepare scripts/commands for immediate post-settlement forensics.
+
+When fewer than 30 minutes remain:
+
+- Freeze speculative deployments.
+- Capture baselines and registration status.
+- Keep research read-only unless an already-proven code fix is completing its
+  final verification.
+- Poll /api/epoch no more frequently than every three minutes.
+
+At or after next_epoch_at:
+
+1. Poll /api/epochs until the new completed epoch appears.
+2. For every declared PREFLIGHT intent, download the full score array.
+3. Also download all watchlist intents, including newly eligible intents.
+4. Do not declare results complete merely because one intent appeared. Confirm
+   all expected declared-intent rows or explicitly identify missing scoring.
+5. Compute raw score, leader, rank, normalized score, portfolio average, and
+   head-to-head versus livecert.
+6. Preserve every competitor failure_reason before any UI truncation.
+7. Recover URLs, hashes, addresses, chain IDs, malformed payloads, methods and
+   parameter names from failures.
+8. Reconstruct PREFLIGHT's exact production response for each recovered input.
+9. Reprioritize all agents based on the new evidence.
+
+If the new epoch is not settled before the six-hour deadline, do not fabricate
+results. Report the latest observed state, leave exact resume instructions, and
+use remaining time on offline Track 1 and Track 2 work.
+
+TRACK 1 — PRIMARY WINNING LOOP
+
+The objective is to maximize normalized portfolio score, not accumulate
+declared intents or pretty endpoints.
+
+For current intents:
+
+- Protect SSL_VERIFICATION, TVL_LOOKUP, WALLET_BALANCE_CHECK, CRYPTO_PRICE, and
+  IP_GEOLOCATION exactly as directed by the mission brief.
+- Treat the post-epoch-295 ONCHAIN changes as pending live validation. Check
+  whether the next epoch exercises found, not_found, pending, unavailable, or a
+  new question-led shape.
+- Investigate URL_SCAN's unseen live-URL/artifact shape without weakening its
+  10/10 archived field wins or reintroducing question-keyword-to-host
+  misclassification.
+- Do not tune CURRENCY_EXCHANGE, ACADEMIC_SEARCH, or ordinary CVE wording without
+  real measurement. Transport, parser, factual, and prose-shape defects may be
+  fixed when independently proven.
+- Do not redeclare GAS_PRICE or STOCK_PRICE on intuition.
+
+For every current-intent candidate:
+
+1. Capture immediate production baseline.
+2. Validate scorer fidelity.
+3. Score all unique (question, ground_truth) pairs.
+4. Report mean, minimum, >0.9 count, beats-field, length, and every per-pair
+   regression.
+5. Require an independent audit.
+6. Implement only the isolated winning branch.
+7. Run the full gate from the mission brief.
+8. Commit one concern with metrics in the commit body.
+9. Push code only if the evidence survives every gate.
+10. Confirm the actual production response and final robust replay.
+
+For every possible new intent:
+
+- Inventory the current field and eligibility rule.
+- Recover real questions and ground truths before building around synthetic
+  examples.
+- Download and validate the exact champion module.
+- Probe public incumbent endpoints and signal mappings.
+- Build a shadow endpoint, never a manifest declaration.
+- Calculate expected normalized contribution and portfolio break-even.
+- Reject any intent whose conservative expected normalized score does not exceed
+  PREFLIGHT's current portfolio mean.
+- A raw rank of number one at score zero is not a win.
+
+CONTENT_EXTRACTION is specifically a watchlist gamble, not an authorized
+addition. Two incumbents scored zero, no receipts exist, and the champion is
+step-like. Find real evidence. Do not activate it just to become the third
+participant.
+
+TRACK 1 EXHAUSTION TEST
+
+Track 1 is not “out of work” merely because no code change is safe. Before
+calling it exhausted, verify that agents have examined:
+
+- every declared intent's latest and historical score shape;
+- every intent where PREFLIGHT is close to first;
+- every zero/failure and every new routed input;
+- all canonical intents with low active-miner counts;
+- every public champion WASM and available receipt corpus;
+- competitor schema/mapping defects;
+- transport and malformed-input behavior on all declared endpoints;
+- portfolio math for each plausible addition;
+- production/deployment/registration health.
+
+If no measured Track 1 improvement remains, keep the epoch-forensics agent
+alive and move the remaining capacity to Track 2.
+
+TRACK 2 — CONQUER THE SCORER FIELD
+
+Treat Track 2 with the same evidence standard as Track 1. The objective is to
+produce canonical scorer candidates that rank correct answers above bad ones on
+at least as many hidden/public cases as the incumbent while achieving strictly
+better average separation.
+
+Known gate behavior:
+
+1. Ordering is checked first.
+2. Candidate must match or beat champion ordering.
+3. If ordering passes, candidate average separation must strictly exceed the
+   champion, not tie it.
+4. A scorer can win by tying ordering and beating separation. This is how
+   PREFLIGHT won TEXT_AUTHENTICITY_CHECK registration 1832: ordering 14–14,
+   margin 0.6651 versus 0.6586.
+5. Passing separation while losing one ordering case still fails. IP scorer
+   attempts repeatedly demonstrated this.
+
+Track 2 operating queue:
+
+1. Query the current WASM registry for every intent.
+2. Record champion registration, URL, hash, eval ordering, separation,
+   comparable cases, worst self-match, standard deviation, and historical rows.
+3. Prioritize intents where:
+   - a real public/archived corpus exists;
+   - the champion's ordering or separation has visible headroom;
+   - the scorer ABI can be reproduced locally;
+   - a small deterministic module can outperform without overfit.
+4. Download champion binaries and verify their keccak256 hashes.
+5. Validate a local harness against recorded node scores before optimizing.
+6. Construct positive/negative pairs from real receipts, factual mutations,
+   omissions, contradictions, stale values, operational-error prose, verbosity,
+   malformed answers, and question-answer mismatch.
+7. Measure champion ordering and margins on the same corpus.
+8. Develop candidate modules in isolated files/branches. Reuse existing scorer
+   infrastructure and scripts where available.
+9. Test ABI compatibility, determinism, finite [0,1] output, self-match,
+   adversarial inputs, memory/runtime, and module size.
+10. Produce a decision packet for each candidate: ordering, separation,
+    per-case results, champion comparison, worst cases, hash, size, build command,
+    and immutable hosting plan.
+
+Track 2 must never register modules unattended. Do not send transactions or use
+hidden-gate rejection as an experimental oracle while the user is absent. Build
+and prove the strongest candidates possible offline, then leave exact
+registration recommendations for the user.
+
+Protect the existing TEXT_AUTHENTICITY_CHECK champion. Do not replace a proven
+winner with a speculative module.
+
+Track 2 technical facts:
+
+- Registry hashes are keccak256, not SHA-256.
+- Host eventual candidates at immutable commit-pinned URLs.
+- Keep modules small and fast. A 24 MB module previously exceeded the gate's
+  600-second budget; a roughly 24 KB module ran in about 10 seconds.
+- Never optimize against an unvalidated TF-IDF proxy when the exact champion can
+  run locally.
+- Do not spend a gate already passed in order to chase another one.
+
+FULL CODE GATE
+
+After every accepted code change:
+
+npm test && npm run typecheck && npm run lint && scripts/smoke.sh &&
+node scripts/epoch-replica.mjs --robust
+
+Before any code-only deployment also run:
+
+npm run build
+npm run validate:config
+
+After deployment:
+
+- wait for Vercel production Ready;
+- query the exact repaired inputs;
+- run all smoke checks against production;
+- run adversarial shape checks;
+- re-run robust against production;
+- confirm registration 377 is still active with the original hash and intents.
+
+If a protected digest moves unexpectedly, revert and report. Never rationalize
+the movement.
+
+FINAL HANDOFF AT THE SIX-HOUR DEADLINE
+
+Do not provide a vague activity summary. Deliver:
+
+1. Exact start/end times and epochs observed.
+2. Whether a new epoch settled and whether all intent results were complete.
+3. Portfolio normalized score and livecert head-to-head.
+4. Per-intent rank, raw score, normalized score, leader, and change from the
+   previous epoch.
+5. Every newly recovered hidden input and the precise PREFLIGHT code path.
+6. Track 1 opportunities accepted, rejected, or still unmeasurable.
+7. Every code change, commit, metric, gate, deployment, and rollback.
+8. Protected-intent before/after proof.
+9. New-intent decision packets, especially CONTENT_EXTRACTION.
+10. Track 2 intent survey and strongest scorer candidates with ordering and
+    separation evidence.
+11. Registration 377 status and explicit confirmation that no on-chain action
+    occurred.
+12. A prioritized next-action queue that another uninterrupted run can resume
+    immediately.
+
+The strategic principle for the entire unattended run:
+
+RESEARCH WIDELY. TEST THE EXACT INSTRUMENT. RAISE CATASTROPHIC FLOORS. PROTECT
+PROVEN PEAKS. ADD NOTHING THAT CANNOT CLEAR PORTFOLIO BREAK-EVEN. NEVER TRADE
+REGISTRATION 377 FOR AN UNMEASURED IDEA. WHEN TRACK 1 HAS NO SAFE MOVE, USE THE
+TIME TO BUILD THE BEST TRACK 2 SCORERS IN THE FIELD.
