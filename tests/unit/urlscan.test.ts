@@ -298,10 +298,15 @@ describe('url scan verdict precedence', () => {
   });
 
   it('does not let a lone lure word or a security-topic page produce a suspicious verdict', async () => {
-    const informational = await scanUrl('https://en.wikipedia.org/wiki/Phishing');
+    // Reserved .example hosts never resolve, so these cases need no network;
+    // the reserved-TLD finding contributes exactly WEIGHTS.reservedTld (10).
+    const informational = await scanUrl('https://wiki.example/wiki/Phishing');
     expect(informational.findings.some((f) => /lures typical/.test(f))).toBe(false);
-    const lone = await scanUrl('https://www.ftc.gov/scams');
-    expect(lone.risk_score).toBeLessThan(20);
+    const lone = await scanUrl('https://shop.example/scams');
+    expect(lone.findings.some((f) => /lures typical/.test(f))).toBe(true);
+    // lure alone must stay below the suspicious threshold (20): 10 reserved + 12 lure.
+    expect(lone.risk_score).toBeLessThan(30);
+    expect(lone.risk_score - 10).toBeLessThan(20);
   });
 
   it('keeps every live reason within the scorer-friendly length band', async () => {
