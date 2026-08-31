@@ -26,7 +26,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { loadScorer } from '../../telegraph-factscore/harness/wasm-abi.mjs';
 
 const RECEIPTS = 'fixtures/live/scored-receipts.json';
-const CHAMPIONS = 'fixtures/champions';
+const CHAMPIONS = process.env.CHAMPIONS_DIR ?? 'fixtures/champions';
 const BASE = process.env.PREFLIGHT_BASE ?? 'https://preflight-ssl-verification.vercel.app';
 
 /** Live endpoint that answers each intent, and a probe for the recorded question. */
@@ -80,13 +80,31 @@ function loadChampions() {
   if (!existsSync(CHAMPIONS)) {
     throw new Error(`${CHAMPIONS} is missing — run scripts/fetch-champions.sh first`);
   }
+  // One module per intent. When a directory holds several registrations for
+  // the same intent the choice must not depend on readdir order (it once
+  // silently resolved CRYPTO_PRICE to whichever file the filesystem listed
+  // last), so the lowest registration number wins and the rest are named.
   const byIntent = new Map();
-  for (const file of readdirSync(CHAMPIONS)) {
-    if (!file.endsWith('.wasm')) continue;
-    const intent = file.replace(/_reg\d+\.wasm$/, '');
-    byIntent.set(intent, `${CHAMPIONS}/${file}`);
+  const ignored = [];
+  for (const file of readdirSync(CHAMPIONS).sort()) {
+    const match = /^(.+)_reg(\d+)\.wasm$/.exec(file);
+    if (!match) continue;
+    const [, intent, reg] = match;
+    const current = byIntent.get(intent);
+    if (current && current.reg <= Number(reg)) {
+      ignored.push(file);
+      continue;
+    }
+    if (current) ignored.push(current.file);
+    byIntent.set(intent, { reg: Number(reg), file, path: `${CHAMPIONS}/${file}` });
   }
-  return byIntent;
+  if (ignored.length > 0) {
+    console.error(
+      `warning: ${CHAMPIONS} holds more than one module for an intent; ignoring ${ignored.join(', ')}. ` +
+        'Keep one registration per intent so replays measure a known scorer.',
+    );
+  }
+  return new Map([...byIntent].map(([intent, entry]) => [intent, entry.path]));
 }
 
 /** Spearman rank correlation, for comparing replica output against recorded scores. */
