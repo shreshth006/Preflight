@@ -476,13 +476,19 @@ export async function scanUrl(
   }
   const lureText = `${hostname}${url.pathname}${url.search}`;
   const informational =
-    INFORMATIONAL_PATH.test(url.pathname) || DEFENSIVE_PATH.test(url.pathname) || /^(gov|edu|mil)$/.test(tld);
+    INFORMATIONAL_PATH.test(url.pathname) ||
+    DEFENSIVE_PATH.test(url.pathname) ||
+    /^(gov|edu|mil)$/.test(tld);
   const strongLure = informational ? undefined : LURE_STRONG.exec(lureText)?.[0];
   const weakLure = informational ? undefined : LURE_WEAK.exec(lureText)?.[0]?.trim();
   if (strongLure || weakLure) {
-    const words = [strongLure, weakLure].filter((w): w is string => Boolean(w)).map((w) => w.toLowerCase());
+    const words = [strongLure, weakLure]
+      .filter((w): w is string => Boolean(w))
+      .map((w) => w.toLowerCase());
     add(
-      strongLure ? WEIGHTS.lureWording + (weakLure ? WEIGHTS.lureWordingWeak : 0) : WEIGHTS.lureWordingWeak,
+      strongLure
+        ? WEIGHTS.lureWording + (weakLure ? WEIGHTS.lureWordingWeak : 0)
+        : WEIGHTS.lureWordingWeak,
       `Its wording (${words.join(', ')}) matches lures typical of phishing, scam or crypto-drainer pages.`,
     );
   }

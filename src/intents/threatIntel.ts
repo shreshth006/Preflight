@@ -49,7 +49,8 @@ const REFERENCES: ThreatReference[] = [
     name: 'SUNBURST (SolarWinds Orion supply-chain compromise)',
     disposition: 'malicious',
     family: 'SUNBURST backdoor',
-    summary: 'a backdoor delivered through a trojanized SolarWinds Orion update that gave attackers remote access to victim networks',
+    summary:
+      'a backdoor delivered through a trojanized SolarWinds Orion update that gave attackers remote access to victim networks',
     facts: [
       'avsvmcloud.com was the command-and-control domain for the SUNBURST backdoor distributed via a trojanized SolarWinds Orion software update, disclosed by FireEye on December 13, 2020.',
       'The malware used a domain generation algorithm to resolve subdomains of avsvmcloud.com, which returned CNAME records pointing to active command-and-control infrastructure.',
@@ -73,7 +74,8 @@ const REFERENCES: ThreatReference[] = [
     name: 'Necurs botnet takedown',
     disposition: 'malicious',
     family: 'Necurs botnet',
-    summary: 'one of the largest spam and malware distribution botnets, which infected more than 9 million computers',
+    summary:
+      'one of the largest spam and malware distribution botnets, which infected more than 9 million computers',
     facts: [
       'On March 10, 2020, Microsoft announced a coordinated legal and technical takedown of the Necurs botnet, which had infected more than 9 million computers globally.',
       "Microsoft analyzed Necurs' domain generation algorithm and predicted over 6 million domains the botnet would have algorithmically generated over the following 25 months, then worked with partners in 35 countries to block them.",
@@ -149,7 +151,8 @@ const REFERENCES: ThreatReference[] = [
     name: 'Operation Tovar (Gameover Zeus)',
     disposition: 'malicious',
     family: 'Gameover Zeus',
-    summary: 'a peer-to-peer banking trojan used for credential theft and CryptoLocker ransomware distribution',
+    summary:
+      'a peer-to-peer banking trojan used for credential theft and CryptoLocker ransomware distribution',
     facts: [
       "In Operation Tovar, executed around May 30, 2014, the FBI, UK's National Crime Agency, Europol and private partners disrupted the peer-to-peer Gameover Zeus botnet.",
       'Gameover Zeus used a fallback domain generation algorithm producing pseudo-random domains as a backup command-and-control channel.',
@@ -162,7 +165,8 @@ const REFERENCES: ThreatReference[] = [
     name: 'Mirai botnet source code release',
     disposition: 'malicious',
     family: 'Mirai botnet',
-    summary: 'IoT botnet malware that infects devices through default credentials to launch large-scale DDoS attacks, with source code leaked in 2016',
+    summary:
+      'IoT botnet malware that infects devices through default credentials to launch large-scale DDoS attacks, with source code leaked in 2016',
     facts: [
       "Mirai, the IoT botnet malware behind the record-breaking September 2016 DDoS attacks on Brian Krebs' site and the host OVH, had its source code leaked publicly on Hack Forums by a user calling themselves Anna-senpai on September 30, 2016.",
       'Academic follow-up research, presented at USENIX Security 2017 by Antonakakis and others, traced numerous command-and-control domains associated with post-leak Mirai variant clusters.',

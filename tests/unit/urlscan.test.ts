@@ -154,7 +154,11 @@ describe('url scan verdict precedence', () => {
       reference,
       artifact: false,
     });
-    expect(reason.startsWith('The URL https://security.example/research/conficker-domain-generation-algorithm is safe, with a risk of 0.1')).toBe(true);
+    expect(
+      reason.startsWith(
+        'The URL https://security.example/research/conficker-domain-generation-algorithm is safe, with a risk of 0.1',
+      ),
+    ).toBe(true);
     expect(reason).toContain('Conficker domain generation algorithm');
     expect(reason.length).toBeLessThan(500);
   });
@@ -197,12 +201,16 @@ describe('url scan verdict precedence', () => {
       reference,
       artifact: false,
     });
-    expect(reason.startsWith('The URL http://lookalike.example/reports/wannacry-killswitch is unsafe, with a risk of 0.8')).toBe(true);
+    expect(
+      reason.startsWith(
+        'The URL http://lookalike.example/reports/wannacry-killswitch is unsafe, with a risk of 0.8',
+      ),
+    ).toBe(true);
     expect(reason).toContain('because the URL uses http rather than HTTPS');
     expect(reason).not.toContain(' is safe,');
   });
 
-  it('states the risk on the question\'s 0 (safe) to 1 (unsafe) scale, consistent with the verdict', () => {
+  it("states the risk on the question's 0 (safe) to 1 (unsafe) scale, consistent with the verdict", () => {
     expect(riskOnUnitScale('safe', 0)).toBe('0.1');
     expect(riskOnUnitScale('safe', 15)).toBe('0.2');
     expect(riskOnUnitScale('suspicious', 20)).toBe('0.3');
@@ -214,10 +222,19 @@ describe('url scan verdict precedence', () => {
 
   it('keeps transport bookkeeping and scope disclaimers out of the scorer-facing reason', async () => {
     const r = await scanUrl('http://127.0.0.1:22');
-    for (const banned of ['out of 100', 'This assessment covers', 'does not consult', 'scanned clean', 'scanned safe', 'checks performed']) {
+    for (const banned of [
+      'out of 100',
+      'This assessment covers',
+      'does not consult',
+      'scanned clean',
+      'scanned safe',
+      'checks performed',
+    ]) {
       expect(r.reason).not.toContain(banned);
     }
-    expect(r.reason.startsWith('The URL http://127.0.0.1:22/ is unsafe, with a risk of ')).toBe(true);
+    expect(r.reason.startsWith('The URL http://127.0.0.1:22/ is unsafe, with a risk of ')).toBe(
+      true,
+    );
     expect(r.reason).toContain('on a 0 (safe) to 1 (unsafe) scale, because ');
   });
 
@@ -257,14 +274,26 @@ describe('url scan verdict precedence', () => {
     expect(cve?.reason).toBe(
       'The input CVE-2021-44228 is not a URL; it is a CVE vulnerability identifier, not a web address, so it cannot be scanned and no safe-or-unsafe verdict applies to it. Its risk on a 0 (safe) to 1 (unsafe) scale cannot be assessed and is left at 0.5 (undetermined) until an actual URL is supplied.',
     );
-    expect(describeNonUrlInput('0x28C6c06298d514Db089934071355E5743bf21d60')?.reason).toContain('an EVM wallet address');
-    expect(describeNonUrlInput('0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef')?.reason).toContain('an EVM wallet address');
+    expect(describeNonUrlInput('0x28C6c06298d514Db089934071355E5743bf21d60')?.reason).toContain(
+      'an EVM wallet address',
+    );
+    expect(describeNonUrlInput('0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef')?.reason).toContain(
+      'an EVM wallet address',
+    );
     expect(describeNonUrlInput('0x' + 'ab'.repeat(32))?.reason).toContain('a transaction hash');
-    expect(describeNonUrlInput('just some words')?.reason).toContain('it is plain text, not a web address');
+    expect(describeNonUrlInput('just some words')?.reason).toContain(
+      'it is plain text, not a web address',
+    );
     expect(describeNonUrlInput('2606:4700:4700::1111')).toBeNull();
     expect(describeNonUrlInput('my_host.example.com/x')).toBeNull();
     // URL-shaped values are left to the scanner.
-    for (const ok of ['example.com', 'https://example.com/x', 'sub.example.co.uk:8443/p', '93.184.216.34', 'localhost:3000/health']) {
+    for (const ok of [
+      'example.com',
+      'https://example.com/x',
+      'sub.example.co.uk:8443/p',
+      '93.184.216.34',
+      'localhost:3000/health',
+    ]) {
       expect(describeNonUrlInput(ok)).toBeNull();
     }
     const asScan = await scanUrl('CVE-2021-44228');
@@ -277,7 +306,9 @@ describe('url scan verdict precedence', () => {
     expect(r.risk_score).toBeGreaterThanOrEqual(20);
     expect(r.findings.some((f) => /lures typical of phishing/.test(f))).toBe(true);
     expect(r.findings.some((f) => /reserved/.test(f))).toBe(true);
-    expect(r.reason.startsWith('The URL https://scam-defi-honeypot.example/claim-a1b2 is ')).toBe(true);
+    expect(r.reason.startsWith('The URL https://scam-defi-honeypot.example/claim-a1b2 is ')).toBe(
+      true,
+    );
     expect(r.reason).toContain('lures typical of phishing');
   });
 
@@ -289,7 +320,9 @@ describe('url scan verdict precedence', () => {
       tlsValid: null,
       tlsIssuer: null,
       resolved: [],
-      findings: ['Its wording (claim) matches lures typical of phishing, scam or crypto-drainer pages.'],
+      findings: [
+        'Its wording (claim) matches lures typical of phishing, scam or crypto-drainer pages.',
+      ],
       reference: null,
       artifact: false,
     });
@@ -316,12 +349,32 @@ describe('url scan verdict precedence', () => {
   });
 
   it('mentions a campaign only on pages that are plausibly about it', () => {
-    const base = { verdict: 'safe' as const, riskScore: 0, tlsValid: true, tlsIssuer: null, resolved: [], findings: [], artifact: false };
+    const base = {
+      verdict: 'safe' as const,
+      riskScore: 0,
+      tlsValid: true,
+      tlsIssuer: null,
+      resolved: [],
+      findings: [],
+      artifact: false,
+    };
     const toyota = new URL('https://www.toyota.com/mirai/');
-    const coincidence = liveScanReason({ ...base, url: toyota, reference: threatReferenceFor(null, toyota.toString()) });
+    const coincidence = liveScanReason({
+      ...base,
+      url: toyota,
+      reference: threatReferenceFor(null, toyota.toString()),
+    });
     expect(coincidence).not.toContain('Mirai');
-    const research = new URL('https://security.example/research/conficker-domain-generation-algorithm');
-    const about = liveScanReason({ ...base, url: research, reference: threatReferenceFor(null, research.toString()) });
-    expect(about).toContain('legitimate research page on security.example about the Conficker domain generation algorithm');
+    const research = new URL(
+      'https://security.example/research/conficker-domain-generation-algorithm',
+    );
+    const about = liveScanReason({
+      ...base,
+      url: research,
+      reference: threatReferenceFor(null, research.toString()),
+    });
+    expect(about).toContain(
+      'legitimate research page on security.example about the Conficker domain generation algorithm',
+    );
   });
 });
